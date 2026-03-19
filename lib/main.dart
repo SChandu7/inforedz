@@ -1,150 +1,214 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 
-void main() {
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'dart:convert';
+import 'splash_screen.dart';
+import 'donor_tab.dart';
+import 'blood_bank_tab.dart';
+import 'profile_tab.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
     ),
   );
-  runApp(const BloodBridgeApp());
+  runApp(const InforedzApp());
 }
-
-// ─── Theme ───────────────────────────────────────────────────────────────────
 
 class AppColors {
-  static const crimson = Color(0xFFCC0000);
-  static const crimsonDark = Color(0xFF8B0000);
-  static const crimsonLight = Color(0xFFFF3333);
-  static const bgDark = Color(0xFF0D0D0D);
-  static const bgCard = Color(0xFF1A1A1A);
-  static const bgCard2 = Color(0xFF222222);
-  static const textPrimary = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0xFFBBBBBB);
-  static const textMuted = Color(0xFF777777);
-  static const success = Color(0xFF2ECC71);
-  static const warning = Color(0xFFF39C12);
-  static const urgent = Color(0xFFFF4444);
+  static const rose = Color(0xFFCC0000);
+  static const roseDark = Color(0xFF8B0000);
+  static const roseLight = Color(0xFFFF6666);
+  static const rosePale = Color(0xFFFFF0F0);
+  static const roseSoft = Color(0xFFFFE4E4);
+  static const white = Color(0xFFFFFFFF);
+  static const offWhite = Color(0xFFFAFAFA);
+  static const bgPage = Color(0xFFF8F3F3);
+  static const cardWhite = Color(0xFFFFFFFF);
+  static const inkDark = Color(0xFF1A0A0A);
+  static const inkMid = Color(0xFF4A2020);
+  static const inkLight = Color(0xFF8B5555);
+  static const textBody = Color(0xFF2D1515);
+  static const textMuted = Color(0xFF9E7070);
+  static const divider = Color(0xFFEDD8D8);
+  static const success = Color(0xFF1E8A4A);
+  static const successBg = Color(0xFFEAF7EF);
+  static const warning = Color(0xFFD97706);
+  static const warningBg = Color(0xFFFFF7ED);
+  static const danger = Color(0xFFDC2626);
+  static const shadow = Color(0x14CC0000);
 }
 
-// ─── Data Models ─────────────────────────────────────────────────────────────
-
-class Donor {
-  final String name, blood, city, phone, avatar, lastDonated;
-  final bool available;
-  final int donations;
-  const Donor({
-    required this.name,
-    required this.blood,
-    required this.city,
-    required this.phone,
-    required this.avatar,
-    required this.lastDonated,
-    required this.available,
-    required this.donations,
-  });
+class ApiConfig {
+  static const baseUrl = 'https://api.chandus7.in/api/inforedz';
+  static const googleMapsKey = 'YOUR_GOOGLE_MAPS_API_KEY';
 }
 
-class BloodRequest {
-  final String patient, blood, hospital, city, units, postedTime, contact;
-  final String urgency; // critical | urgent | normal
-  const BloodRequest({
-    required this.patient,
-    required this.blood,
-    required this.hospital,
-    required this.city,
-    required this.units,
-    required this.postedTime,
-    required this.contact,
-    required this.urgency,
-  });
+class AuthState {
+  static int? userId;
+  static String? email;
+  static String? role;
+  static String? name;
+  static String? bloodGroup;
+  static String? bankName;
+  static bool isLoggedIn = false;
+
+  static Future<void> loadFromPrefs() async {
+    final p = await SharedPreferences.getInstance();
+    userId = p.getInt('userId');
+    email = p.getString('email');
+    role = p.getString('role');
+    name = p.getString('name');
+    bloodGroup = p.getString('bloodGroup');
+    bankName = p.getString('bankName');
+    isLoggedIn = p.getBool('isLoggedIn') ?? false;
+  }
+
+  static Future<void> save() async {
+    final p = await SharedPreferences.getInstance();
+    if (userId != null) await p.setInt('userId', userId!);
+    if (email != null) await p.setString('email', email!);
+    if (role != null) await p.setString('role', role!);
+    if (name != null) await p.setString('name', name!);
+    if (bloodGroup != null) await p.setString('bloodGroup', bloodGroup!);
+    if (bankName != null) await p.setString('bankName', bankName!);
+    await p.setBool('isLoggedIn', isLoggedIn);
+  }
+
+  static Future<void> clear() async {
+    final p = await SharedPreferences.getInstance();
+    await p.clear();
+    userId = null;
+    email = null;
+    role = null;
+    name = null;
+    bloodGroup = null;
+    bankName = null;
+    isLoggedIn = false;
+  }
 }
 
-class BloodBank {
-  final String name, city, address, phone, timing;
-  final Map<String, int> stock;
-  final double rating;
-  final bool open;
-  const BloodBank({
-    required this.name,
-    required this.city,
-    required this.address,
-    required this.phone,
-    required this.timing,
-    required this.stock,
-    required this.rating,
-    required this.open,
-  });
+// ── LOCATION SERVICE ──────────────────────────────────────────
+class LocationService {
+  static Future<Position?> getCurrentPosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return null;
+      }
+      if (permission == LocationPermission.deniedForever) return null;
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String> getCityFromCoords(double lat, double lng) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json',
+      );
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'InforedzApp/1.0'})
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final addr = data['address'] as Map<String, dynamic>? ?? {};
+        return addr['city'] ??
+            addr['town'] ??
+            addr['village'] ??
+            addr['county'] ??
+            addr['state'] ??
+            '';
+      }
+    } catch (_) {}
+    return '';
+  }
 }
 
-// ─── Sample Data ─────────────────────────────────────────────────────────────
-
-final List<Donor> donors = [
-  const Donor(name: 'Arjun Mehta', blood: 'O+', city: 'Delhi', phone: '+91 98100 11223', avatar: 'AM', lastDonated: '3 months ago', available: true, donations: 12),
-  const Donor(name: 'Priya Sharma', blood: 'A-', city: 'Mumbai', phone: '+91 98200 44556', avatar: 'PS', lastDonated: '1 month ago', available: false, donations: 7),
-  const Donor(name: 'Rohan Gupta', blood: 'B+', city: 'Bangalore', phone: '+91 91100 77889', avatar: 'RG', lastDonated: '5 months ago', available: true, donations: 20),
-  const Donor(name: 'Sneha Patel', blood: 'AB+', city: 'Ahmedabad', phone: '+91 93300 22110', avatar: 'SP', lastDonated: '2 months ago', available: true, donations: 5),
-  const Donor(name: 'Vikram Singh', blood: 'O-', city: 'Jaipur', phone: '+91 99900 33221', avatar: 'VS', lastDonated: '4 months ago', available: true, donations: 15),
-  const Donor(name: 'Anita Nair', blood: 'A+', city: 'Chennai', phone: '+91 98400 55667', avatar: 'AN', lastDonated: '6 months ago', available: true, donations: 9),
-];
-
-final List<BloodRequest> requests = [
-  const BloodRequest(patient: 'Ravi Kumar', blood: 'O-', hospital: 'AIIMS Delhi', city: 'New Delhi', units: '3 units', postedTime: '10 min ago', contact: '+91 98765 43210', urgency: 'critical'),
-  const BloodRequest(patient: 'Meera Joshi', blood: 'B+', hospital: 'Fortis Hospital', city: 'Noida', units: '2 units', postedTime: '45 min ago', contact: '+91 98100 22334', urgency: 'urgent'),
-  const BloodRequest(patient: 'Suresh Rao', blood: 'AB-', hospital: 'Apollo Hospitals', city: 'Hyderabad', units: '1 unit', postedTime: '2 hrs ago', contact: '+91 97600 55443', urgency: 'urgent'),
-  const BloodRequest(patient: 'Fatima Sheikh', blood: 'A+', hospital: 'Lilavati Hospital', city: 'Mumbai', units: '4 units', postedTime: '3 hrs ago', contact: '+91 99800 11234', urgency: 'normal'),
-  const BloodRequest(patient: 'Deepak Verma', blood: 'O+', hospital: 'Narayana Health', city: 'Bangalore', units: '2 units', postedTime: '5 hrs ago', contact: '+91 90000 66778', urgency: 'normal'),
-];
-
-final List<BloodBank> banks = [
-  const BloodBank(name: 'LifeSource Blood Centre', city: 'New Delhi', address: 'Plot 12, Connaught Place, New Delhi', phone: '+91 11 2345 6789', timing: '24/7 Open', stock: {'O+': 45, 'O-': 12, 'A+': 38, 'A-': 8, 'B+': 30, 'B-': 6, 'AB+': 20, 'AB-': 4}, rating: 4.8, open: true),
-  const BloodBank(name: 'RedCross Blood Bank', city: 'Mumbai', address: '14 Dr. DN Road, Fort, Mumbai', phone: '+91 22 6789 1234', timing: '8AM – 10PM', stock: {'O+': 60, 'O-': 5, 'A+': 42, 'A-': 15, 'B+': 25, 'B-': 10, 'AB+': 18, 'AB-': 2}, rating: 4.6, open: true),
-  const BloodBank(name: 'Sanjeevani Blood Centre', city: 'Bangalore', address: '88 MG Road, Shivaji Nagar, Bangalore', phone: '+91 80 4567 8901', timing: '9AM – 8PM', stock: {'O+': 28, 'O-': 3, 'A+': 35, 'A-': 6, 'B+': 40, 'B-': 8, 'AB+': 12, 'AB-': 1}, rating: 4.3, open: false),
-  const BloodBank(name: 'Apollo Blood Services', city: 'Chennai', address: '21 Greams Road, Thousand Lights, Chennai', phone: '+91 44 2345 9876', timing: '24/7 Open', stock: {'O+': 55, 'O-': 9, 'A+': 50, 'A-': 11, 'B+': 33, 'B-': 7, 'AB+': 22, 'AB-': 5}, rating: 4.9, open: true),
-];
-
-// ─── App Root ─────────────────────────────────────────────────────────────────
-
-class BloodBridgeApp extends StatelessWidget {
-  const BloodBridgeApp({super.key});
-
+// ── ROOT APP ──────────────────────────────────────────────────
+class InforedzApp extends StatelessWidget {
+  const InforedzApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BloodBridge',
+      title: 'Inforedz',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: AppColors.bgDark,
-        primaryColor: AppColors.crimson,
-        colorScheme: const ColorScheme.dark(
-          primary: AppColors.crimson,
-          surface: AppColors.bgCard,
+      theme: ThemeData(
+        scaffoldBackgroundColor: AppColors.bgPage,
+        primaryColor: AppColors.rose,
+        fontFamily: 'Poppins',
+        colorScheme: ColorScheme.light(
+          primary: AppColors.rose,
+          secondary: AppColors.roseDark,
+          surface: AppColors.cardWhite,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.rose,
+            foregroundColor: AppColors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.offWhite,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.rose, width: 1.5),
+          ),
+          labelStyle: const TextStyle(color: AppColors.inkLight),
+          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
         ),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
 
-// ─── Home Screen (3 tabs) ─────────────────────────────────────────────────────
-
+// ── HOME SCREEN ───────────────────────────────────────────────
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
-
-  static const _pages = [DonorPage(), NeedBloodPage(), BloodBankPage()];
+  final _pages = const [DonorTab(), BloodBankTab(), ProfileTab()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_tab],
+      body: IndexedStack(index: _tab, children: _pages),
       bottomNavigationBar: _buildNav(),
     );
   }
@@ -152,17 +216,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNav() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        border: Border(top: BorderSide(color: AppColors.crimson.withOpacity(0.3), width: 1)),
+        color: AppColors.white,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+        border: const Border(
+          top: BorderSide(color: AppColors.divider, width: 0.5),
+        ),
       ),
       child: SafeArea(
         child: SizedBox(
-          height: 64,
+          height: 62,
           child: Row(
             children: [
-              _navItem(0, Icons.volunteer_activism_rounded, 'Donate'),
-              _navItem(1, Icons.bloodtype_rounded, 'Need Blood'),
-              _navItem(2, Icons.local_hospital_rounded, 'Blood Banks'),
+              _navItem(0, Icons.volunteer_activism_rounded, 'Donate Blood'),
+              _navItem(1, Icons.local_hospital_rounded, 'Blood Banks'),
+              _navItem(2, Icons.person_rounded, 'Profile'),
             ],
           ),
         ),
@@ -179,14 +252,26 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: active ? AppColors.crimson : AppColors.textMuted, size: 26),
-            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: active ? AppColors.rosePale : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                icon,
+                color: active ? AppColors.rose : AppColors.textMuted,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                color: active ? AppColors.crimson : AppColors.textMuted,
+                color: active ? AppColors.rose : AppColors.textMuted,
               ),
             ),
           ],
@@ -196,725 +281,1085 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── Shared Widgets ───────────────────────────────────────────────────────────
-
-class PageHeader extends StatelessWidget {
-  final String title, subtitle;
-  final IconData icon;
-  const PageHeader({super.key, required this.title, required this.subtitle, required this.icon});
-
+// ── AUTH SCREEN ───────────────────────────────────────────────
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.crimsonDark, Color(0xFF1A0000)],
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
-                  Text(subtitle, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7))),
-                ],
-              ),
-              const Spacer(),
-              Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 20),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class BloodTypeBadge extends StatelessWidget {
-  final String type;
-  final double size;
-  const BloodTypeBadge({super.key, required this.type, this.size = 14});
+class _AuthScreenState extends State<AuthScreen> {
+  bool _isLogin = true;
+  String _role = 'donor';
+  bool _loading = false;
+  bool _obscure = true;
+  bool _locLoading = false;
+  String _locStatus = '';
+  double? _capturedLat;
+  double? _capturedLng;
+
+  final _formKey = GlobalKey<FormState>();
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _bloodCtrl = TextEditingController();
+  final _bankNameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _weightCtrl = TextEditingController();
+  final _bankAddressCtrl = TextEditingController();
+  final _bankPhoneCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  String _gender = 'Male';
+  String _lastDonated = 'Never';
+  bool _hasCondition = false;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: size * 0.6, vertical: size * 0.3),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AppColors.crimson, AppColors.crimsonDark]),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(type, style: TextStyle(fontSize: size, fontWeight: FontWeight.w900, color: Colors.white)),
-    );
-  }
-}
+  void dispose() {
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _nameCtrl.dispose();
+    _bloodCtrl.dispose();
+    _bankNameCtrl.dispose();
+    _ageCtrl.dispose();
+    _weightCtrl.dispose();
+    _bankAddressCtrl.dispose();
+    _bankPhoneCtrl.dispose();
+    _cityCtrl.dispose();
+    _phoneCtrl.dispose();
 
-class StockChip extends StatelessWidget {
-  final String group;
-  final int units;
-  const StockChip({super.key, required this.group, required this.units});
-
-  Color get _color {
-    if (units == 0) return AppColors.textMuted;
-    if (units < 5) return AppColors.urgent;
-    if (units < 15) return AppColors.warning;
-    return AppColors.success;
+    super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: _color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _color.withOpacity(0.4)),
-      ),
-      child: Column(
-        children: [
-          Text(group, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text('$units', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _color)),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── 1. Donor Page ────────────────────────────────────────────────────────────
-
-class DonorPage extends StatefulWidget {
-  const DonorPage({super.key});
-
-  @override
-  State<DonorPage> createState() => _DonorPageState();
-}
-
-class _DonorPageState extends State<DonorPage> {
-  String _filter = 'All';
-  final _types = ['All', 'O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
-
-  List<Donor> get _filtered =>
-      _filter == 'All' ? donors : donors.where((d) => d.blood == _filter).toList();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const PageHeader(title: 'BloodBridge', subtitle: 'Find a donor near you', icon: Icons.volunteer_activism_rounded),
-        _buildStats(),
-        _buildSearch(),
-        _buildFilters(),
-        Expanded(child: _buildList()),
-        _buildRegisterBtn(),
-      ],
-    );
+  Future<void> _detectLocation() async {
+    setState(() {
+      _locLoading = true;
+      _locStatus = 'Detecting your location...';
+    });
+    final pos = await LocationService.getCurrentPosition();
+    if (pos != null) {
+      _capturedLat = pos.latitude;
+      _capturedLng = pos.longitude;
+      final city = await LocationService.getCityFromCoords(
+        pos.latitude,
+        pos.longitude,
+      );
+      _cityCtrl.text = city;
+      setState(() {
+        _locStatus =
+            '✓ ${city.isNotEmpty ? city : '${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}'}';
+        _locLoading = false;
+      });
+    } else {
+      setState(() {
+        _locStatus = 'GPS unavailable — enter city manually';
+        _locLoading = false;
+      });
+    }
   }
 
-  Widget _buildStats() {
-    return Container(
-      color: AppColors.bgCard2,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _stat('2,841', 'Donors'),
-          _divider(),
-          _stat('6', 'Cities'),
-          _divider(),
-          _stat('12K+', 'Lives Saved'),
-        ],
-      ),
-    );
-  }
-
-  Widget _stat(String val, String label) {
-    return Column(
-      children: [
-        Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.crimson)),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-
-  Widget _divider() => Container(width: 1, height: 30, color: AppColors.bgCard);
-
-  Widget _buildSearch() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-      child: Container(
-        decoration: BoxDecoration(color: AppColors.bgCard, borderRadius: BorderRadius.circular(12)),
-        child: const TextField(
-          style: TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Search by name, city or blood type...',
-            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
-            prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 14),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilters() {
-    return SizedBox(
-      height: 42,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _types.length,
-        itemBuilder: (_, i) {
-          final t = _types[i];
-          final sel = t == _filter;
-          return GestureDetector(
-            onTap: () => setState(() => _filter = t),
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                gradient: sel ? const LinearGradient(colors: [AppColors.crimson, AppColors.crimsonDark]) : null,
-                color: sel ? null : AppColors.bgCard,
-                borderRadius: BorderRadius.circular(20),
-                border: sel ? null : Border.all(color: AppColors.bgCard2),
-              ),
-              child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: sel ? Colors.white : AppColors.textSecondary)),
-            ),
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      final endpoint = _isLogin ? '/login/' : '/register/';
+      final body = _isLogin
+          ? {'email': _emailCtrl.text.trim(), 'password': _passCtrl.text}
+          : _buildRegisterBody();
+      debugPrint('POST $endpoint => $body');
+      final result = await ApiService.post(endpoint, body);
+      debugPrint('RESULT => $result');
+      if (!mounted) return;
+      if (result['success'] == true) {
+        final user =
+            (result['data'] as Map<String, dynamic>)['user']
+                as Map<String, dynamic>;
+        AuthState.userId = user['id'];
+        AuthState.email = user['email'];
+        AuthState.role = user['role'];
+        AuthState.name = user['name'];
+        AuthState.bloodGroup = user['blood_group'];
+        AuthState.bankName = user['bank_name'];
+        AuthState.isLoggedIn = true;
+        await AuthState.save();
+        if (mounted)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
-        },
-      ),
-    );
+      } else {
+        _showError(result['message'] ?? 'Something went wrong');
+      }
+    } catch (e) {
+      debugPrint('ERROR: $e');
+      _showError('Error: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-      itemCount: _filtered.length,
-      itemBuilder: (_, i) => _DonorCard(donor: _filtered[i]),
-    );
+  Map<String, dynamic> _buildRegisterBody() {
+    final base = <String, dynamic>{
+      'email': _emailCtrl.text.trim(),
+      'password': _passCtrl.text,
+      'name': _nameCtrl.text.trim(),
+      'role': _role,
+      'city': _cityCtrl.text.trim(),
+      'latitude': _capturedLat,
+      'longitude': _capturedLng,
+      'phone': _phoneCtrl.text.trim(), // ← add this
+    };
+    if (_role == 'donor') {
+      base.addAll({
+        'blood_group': _bloodCtrl.text.trim(),
+        'age': _ageCtrl.text.trim(),
+        'gender': _gender,
+        'weight': _weightCtrl.text.trim(),
+        'last_donated': _lastDonated,
+        'has_condition': _hasCondition.toString(),
+      });
+    } else {
+      base.addAll({
+        'bank_name': _bankNameCtrl.text.trim(),
+        'bank_address': _bankAddressCtrl.text.trim(),
+        'bank_phone': _bankPhoneCtrl.text.trim(),
+      });
+    }
+    return base;
   }
 
-  Widget _buildRegisterBtn() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      child: SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: ElevatedButton.icon(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.crimson,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-          label: const Text('Register as a Donor', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-        ),
-      ),
-    );
-  }
-}
-
-class _DonorCard extends StatelessWidget {
-  final Donor donor;
-  const _DonorCard({required this.donor});
+  void _showError(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.rose,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: donor.available ? AppColors.crimson.withOpacity(0.25) : Colors.transparent),
-      ),
-      child: Row(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: AppColors.crimson.withOpacity(0.2),
-                child: Text(donor.avatar, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.crimson)),
-              ),
-              if (donor.available)
-                Positioned(
-                  right: 0, bottom: 0,
-                  child: Container(
-                    width: 12, height: 12,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.bgCard, width: 2),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 14),
-          Expanded(
+    return Scaffold(
+      backgroundColor: AppColors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Form(
+            key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(donor.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
-                    const Spacer(),
-                    BloodTypeBadge(type: donor.blood),
-                  ],
+                const SizedBox(height: 40),
+                _header(),
+                const SizedBox(height: 32),
+                if (!_isLogin) _roleSelector(),
+                if (!_isLogin) const SizedBox(height: 20),
+                _emailField(),
+                const SizedBox(height: 14),
+                _passwordField(),
+                if (!_isLogin) ...[
+                  const SizedBox(height: 14),
+                  _nameField(),
+                  const SizedBox(height: 16),
+                  _locationSection(),
+                  const SizedBox(height: 20),
+                  if (_role == 'donor') _donorFields(),
+                  if (_role == 'blood_bank') _bankFields(),
+                ],
+                const SizedBox(height: 28),
+                _submitBtn(),
+                const SizedBox(height: 20),
+                _toggle(),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.rose,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.water_drop_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 10),
+          RichText(
+            text: const TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Info',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.inkDark,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on_rounded, size: 13, color: AppColors.textMuted),
-                    const SizedBox(width: 2),
-                    Text(donor.city, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.favorite_rounded, size: 13, color: AppColors.crimson),
-                    const SizedBox(width: 2),
-                    Text('${donor.donations} donations', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: (donor.available ? AppColors.success : AppColors.textMuted).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        donor.available ? '✓ Available' : '✗ Unavailable',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: donor.available ? AppColors.success : AppColors.textMuted),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text('Last donated: ${donor.lastDonated}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                  ],
+                TextSpan(
+                  text: 'redz',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.rose,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─── 2. Need Blood Page ───────────────────────────────────────────────────────
-
-class NeedBloodPage extends StatelessWidget {
-  const NeedBloodPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const PageHeader(title: 'Need Blood?', subtitle: 'Browse active blood requests', icon: Icons.bloodtype_rounded),
-        _buildSOS(context),
-        Expanded(child: _buildList()),
-      ],
-    );
-  }
-
-  Widget _buildSOS(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8B0000), Color(0xFF300000)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+      const SizedBox(height: 24),
+      Text(
+        _isLogin ? 'Welcome back' : 'Create account',
+        style: const TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.w800,
+          color: AppColors.inkDark,
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: AppColors.crimson.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 6))],
       ),
-      child: Row(
+      const SizedBox(height: 4),
+      Text(
+        _isLogin
+            ? 'Sign in to continue saving lives'
+            : 'Join the life-saving community',
+        style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
+      ),
+    ],
+  );
+
+  Widget _roleSelector() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'I am registering as',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.inkMid,
+        ),
+      ),
+      const SizedBox(height: 10),
+      Row(
         children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('EMERGENCY?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white70, letterSpacing: 2)),
-              SizedBox(height: 4),
-              Text('Post a Blood\nRequest Now', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, height: 1.2)),
-            ],
-          ),
-          const Spacer(),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.crimson,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            ),
-            child: const Text('SOS POST', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-          ),
+          _roleChip('donor', Icons.volunteer_activism_rounded, 'Blood Donor'),
+          const SizedBox(width: 12),
+          _roleChip('blood_bank', Icons.local_hospital_rounded, 'Blood Bank'),
         ],
       ),
-    );
-  }
+    ],
+  );
 
-  Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      itemCount: requests.length,
-      itemBuilder: (_, i) => _RequestCard(req: requests[i]),
-    );
-  }
-}
-
-class _RequestCard extends StatelessWidget {
-  final BloodRequest req;
-  const _RequestCard({required this.req});
-
-  Color get _urgencyColor {
-    switch (req.urgency) {
-      case 'critical': return AppColors.urgent;
-      case 'urgent': return AppColors.warning;
-      default: return AppColors.success;
-    }
-  }
-
-  IconData get _urgencyIcon {
-    switch (req.urgency) {
-      case 'critical': return Icons.emergency_rounded;
-      case 'urgent': return Icons.priority_high_rounded;
-      default: return Icons.info_outline_rounded;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _urgencyColor.withOpacity(0.3)),
+  Widget _roleChip(String val, IconData icon, String label) {
+    final sel = _role == val;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _role = val),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: sel ? AppColors.rosePale : AppColors.offWhite,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: sel ? AppColors.rose : AppColors.divider,
+              width: sel ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: sel ? AppColors.rose : AppColors.textMuted,
+                size: 26,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: sel ? AppColors.rose : AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Column(
-        children: [
+    );
+  }
+
+  // ── LOCATION SECTION ────────────────────────────────────────
+  // add this at top of _AuthScreenState fields
+  List<Map<String, dynamic>> _citySuggestions = [];
+  bool _citySearching = false;
+
+  Future<List<Map<String, dynamic>>> _searchCities(String query) async {
+    if (query.length < 3) return [];
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=in',
+      );
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'InforedzApp/1.0'})
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        return list
+            .map(
+              (e) => {
+                'display': e['display_name'] ?? '',
+                'short':
+                    (e['address']?['city'] ??
+                    e['address']?['town'] ??
+                    e['address']?['village'] ??
+                    e['address']?['county'] ??
+                    query),
+                'lat': double.tryParse(e['lat'] ?? '') ?? 0.0,
+                'lng': double.tryParse(e['lon'] ?? '') ?? 0.0,
+              },
+            )
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Widget _locationSection() {
+    final hasLoc = _capturedLat != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // section label
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.rosePale,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '📍 Your Location',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.roseDark,
+                ),
+              ),
+              Text(
+                'Search your city — required to appear on the map',
+                style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── CITY SEARCH with autocomplete ──────────────────────
+        TypeAheadField<Map<String, dynamic>>(
+          controller: _cityCtrl,
+          builder: (context, controller, focusNode) => TextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(fontSize: 14, color: AppColors.textBody),
+            decoration: InputDecoration(
+              labelText: 'Search city or area',
+              prefixIcon: const Icon(Icons.location_city_outlined, size: 18),
+              suffixIcon: hasLoc
+                  ? const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.success,
+                      size: 20,
+                    )
+                  : _citySearching
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.rose,
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: AppColors.textMuted,
+                    ),
+              helperText: hasLoc
+                  ? '✓ Coordinates saved — you will appear on map'
+                  : 'Type at least 3 letters to see suggestions',
+              helperStyle: TextStyle(
+                fontSize: 10,
+                color: hasLoc ? AppColors.success : AppColors.textMuted,
+              ),
+              helperMaxLines: 2,
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'City is required' : null,
+          ),
+          suggestionsCallback: (query) async {
+            setState(() => _citySearching = true);
+            final results = await _searchCities(query);
+            setState(() => _citySearching = false);
+            return results;
+          },
+          itemBuilder: (context, suggestion) => ListTile(
+            leading: const Icon(
+              Icons.location_on_rounded,
+              color: AppColors.rose,
+              size: 18,
+            ),
+            title: Text(
+              suggestion['short'],
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textBody,
+              ),
+            ),
+            subtitle: Text(
+              suggestion['display'],
+              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          onSelected: (suggestion) {
+            setState(() {
+              _cityCtrl.text = suggestion['short'];
+              _capturedLat = suggestion['lat'];
+              _capturedLng = suggestion['lng'];
+              _locStatus = '✓ ${suggestion['short']}';
+            });
+            FocusScope.of(context).unfocus();
+          },
+          emptyBuilder: (_) => const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'No results — try a different spelling',
+              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+            ),
+          ),
+          loadingBuilder: (_) => const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: AppColors.rose,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+          decorationBuilder: (context, child) => Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: child,
+            ),
+          ),
+        ),
+
+        // ── GPS fallback button ─────────────────────────────────
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: _locLoading ? null : _detectLocation,
+          child: Row(
+            children: [
+              _locLoading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.rose,
+                      ),
+                    )
+                  : Icon(
+                      Icons.my_location_rounded,
+                      size: 14,
+                      color: hasLoc ? AppColors.success : AppColors.rose,
+                    ),
+              const SizedBox(width: 6),
+              Text(
+                _locLoading
+                    ? 'Detecting GPS...'
+                    : hasLoc
+                    ? 'Re-detect using GPS'
+                    : 'Or use GPS auto-detect instead',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: hasLoc ? AppColors.success : AppColors.rose,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── confirmed location pill ─────────────────────────────
+        if (hasLoc) ...[
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _urgencyColor.withOpacity(0.1),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              color: AppColors.successBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.success.withOpacity(0.3)),
             ),
             child: Row(
               children: [
-                Icon(_urgencyIcon, size: 14, color: _urgencyColor),
-                const SizedBox(width: 6),
-                Text(req.urgency.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: _urgencyColor, letterSpacing: 1.5)),
-                const Spacer(),
-                Text(req.postedTime, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(req.patient, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.local_hospital_rounded, size: 13, color: AppColors.textMuted),
-                              const SizedBox(width: 4),
-                              Expanded(child: Text(req.hospital, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_rounded, size: 13, color: AppColors.textMuted),
-                              const SizedBox(width: 4),
-                              Text(req.city, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        BloodTypeBadge(type: req.blood, size: 18),
-                        const SizedBox(height: 6),
-                        Text(req.units, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ],
+                const Icon(
+                  Icons.location_on_rounded,
+                  size: 14,
+                  color: AppColors.success,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {},
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.crimson),
-                          foregroundColor: AppColors.crimson,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                        icon: const Icon(Icons.call_rounded, size: 16),
-                        label: const Text('Call Now', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${_cityCtrl.text}  •  ${_capturedLat!.toStringAsFixed(4)}, ${_capturedLng!.toStringAsFixed(4)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.success,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.crimson,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                        icon: const Icon(Icons.volunteer_activism_rounded, size: 16),
-                        label: const Text('Respond', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
+                  ),
+                ),
+                const Icon(
+                  Icons.map_rounded,
+                  size: 14,
+                  color: AppColors.success,
                 ),
               ],
             ),
           ),
         ],
-      ),
+      ],
     );
   }
-}
 
-// ─── 3. Blood Bank Page ───────────────────────────────────────────────────────
+  Widget _emailField() => TextFormField(
+    controller: _emailCtrl,
+    keyboardType: TextInputType.emailAddress,
+    decoration: const InputDecoration(
+      labelText: 'Email address',
+      prefixIcon: Icon(Icons.email_outlined, size: 20),
+    ),
+    validator: (v) =>
+        (v == null || !v.contains('@')) ? 'Enter valid email' : null,
+  );
 
-class BloodBankPage extends StatelessWidget {
-  const BloodBankPage({super.key});
+  Widget _passwordField() => TextFormField(
+    controller: _passCtrl,
+    obscureText: _obscure,
+    decoration: InputDecoration(
+      labelText: 'Password',
+      prefixIcon: const Icon(Icons.lock_outline, size: 20),
+      suffixIcon: IconButton(
+        icon: Icon(
+          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          size: 20,
+        ),
+        onPressed: () => setState(() => _obscure = !_obscure),
+      ),
+    ),
+    validator: (v) => (v == null || v.length < 6) ? 'Min 6 characters' : null,
+  );
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+  Widget _nameField() => TextFormField(
+    controller: _nameCtrl,
+    decoration: InputDecoration(
+      labelText: _role == 'donor' ? 'Your full name' : 'Contact person name',
+      prefixIcon: const Icon(Icons.person_outline, size: 20),
+    ),
+    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+  );
+
+  Widget _donorFields() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _sectionLabel('🩸 Donor Details'),
+      const SizedBox(height: 12),
+      _bloodGroupDropdown(),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _ageCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Age',
+                prefixIcon: Icon(Icons.cake_outlined, size: 18),
+              ),
+              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextFormField(
+              controller: _weightCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Weight (kg)',
+                prefixIcon: Icon(Icons.monitor_weight_outlined, size: 18),
+              ),
+              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _genderSelector(),
+      const SizedBox(height: 12),
+      _lastDonatedDropdown(),
+      const SizedBox(height: 12),
+      const SizedBox(height: 14),
+      TextFormField(
+        controller: _phoneCtrl,
+        keyboardType: TextInputType.phone,
+        decoration: const InputDecoration(
+          labelText: 'Mobile number',
+          prefixIcon: Icon(Icons.phone_outlined, size: 18),
+          hintText: '+91 98765 43210',
+        ),
+        validator: (v) => (v == null || v.trim().length < 10)
+            ? 'Enter valid mobile number'
+            : null,
+      ),
+    ],
+  );
+
+  Widget _bankFields() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _sectionLabel('🏥 Blood Bank Details'),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _bankNameCtrl,
+        decoration: const InputDecoration(
+          labelText: 'Blood bank / organisation name',
+          prefixIcon: Icon(Icons.business_outlined, size: 18),
+        ),
+        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _bankAddressCtrl,
+        maxLines: 2,
+        decoration: const InputDecoration(
+          labelText: 'Full address',
+          prefixIcon: Icon(Icons.location_on_outlined, size: 18),
+        ),
+        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _bankPhoneCtrl,
+        keyboardType: TextInputType.phone,
+        decoration: const InputDecoration(
+          labelText: 'Contact phone number',
+          prefixIcon: Icon(Icons.phone_outlined, size: 18),
+        ),
+        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+      ),
+    ],
+  );
+
+  Widget _sectionLabel(String t) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: AppColors.rosePale,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      t,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AppColors.roseDark,
+      ),
+    ),
+  );
+
+  Widget _bloodGroupDropdown() {
+    const groups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+    return DropdownButtonFormField<String>(
+      value: _bloodCtrl.text.isEmpty ? null : _bloodCtrl.text,
+      decoration: const InputDecoration(
+        labelText: 'Blood group',
+        prefixIcon: Icon(Icons.water_drop_outlined, size: 18),
+      ),
+      items: groups
+          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+          .toList(),
+      onChanged: (v) {
+        if (v != null) _bloodCtrl.text = v;
+      },
+      validator: (v) => v == null ? 'Select blood group' : null,
+    );
+  }
+
+  Widget _genderSelector() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Gender',
+        style: TextStyle(fontSize: 12, color: AppColors.inkLight),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: ['Male', 'Female', 'Other'].map((g) {
+          final sel = _gender == g;
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: GestureDetector(
+              onTap: () => setState(() => _gender = g),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.rosePale : AppColors.offWhite,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: sel ? AppColors.rose : AppColors.divider,
+                  ),
+                ),
+                child: Text(
+                  g,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: sel ? AppColors.rose : AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    ],
+  );
+
+  Widget _lastDonatedDropdown() {
+    const opts = [
+      'Never',
+      'Less than 3 months ago',
+      '3-6 months ago',
+      'More than 6 months ago',
+    ];
+    return DropdownButtonFormField<String>(
+      value: _lastDonated,
+      decoration: const InputDecoration(
+        labelText: 'Last donated blood',
+        prefixIcon: Icon(Icons.history_rounded, size: 18),
+      ),
+      items: opts
+          .map(
+            (o) => DropdownMenuItem(
+              value: o,
+              child: Text(o, style: const TextStyle(fontSize: 13)),
+            ),
+          )
+          .toList(),
+      onChanged: (v) {
+        if (v != null) setState(() => _lastDonated = v);
+      },
+    );
+  }
+
+  Widget _conditionToggle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: AppColors.offWhite,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.divider),
+    ),
+    child: Row(
       children: [
-        const PageHeader(title: 'Blood Banks', subtitle: 'Live stock levels near you', icon: Icons.local_hospital_rounded),
-        _buildLegend(),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            itemCount: banks.length,
-            itemBuilder: (_, i) => _BankCard(bank: banks[i]),
+        const Icon(
+          Icons.medical_information_outlined,
+          size: 18,
+          color: AppColors.inkLight,
+        ),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            'I have any chronic medical condition',
+            style: TextStyle(fontSize: 13, color: AppColors.textBody),
           ),
         ),
+        Switch.adaptive(
+          value: _hasCondition,
+          onChanged: (v) => setState(() => _hasCondition = v),
+          activeColor: AppColors.rose,
+        ),
       ],
-    );
-  }
+    ),
+  );
 
-  Widget _buildLegend() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      child: Row(
-        children: [
-          const Text('Stock levels: ', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-          _legendDot(AppColors.success, 'Good'),
-          const SizedBox(width: 10),
-          _legendDot(AppColors.warning, 'Low'),
-          const SizedBox(width: 10),
-          _legendDot(AppColors.urgent, 'Critical'),
-        ],
+  Widget _submitBtn() => SizedBox(
+    width: double.infinity,
+    height: 52,
+    child: ElevatedButton(
+      onPressed: _loading ? null : _submit,
+      child: _loading
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
+            )
+          : Text(_isLogin ? 'Sign In' : 'Create Account'),
+    ),
+  );
+
+  Widget _toggle() => Center(
+    child: GestureDetector(
+      onTap: () => setState(() {
+        _isLogin = !_isLogin;
+        _capturedLat = null;
+        _capturedLng = null;
+        _cityCtrl.clear();
+        _locStatus = '';
+      }),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: _isLogin
+                  ? "Don't have an account? "
+                  : 'Already have an account? ',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontFamily: 'Poppins',
+              ),
+            ),
+            TextSpan(
+              text: _isLogin ? 'Sign Up' : 'Sign In',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.rose,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
+        ),
       ),
-    );
+    ),
+  );
+}
+
+// ── API SERVICE ───────────────────────────────────────────────
+class ApiService {
+  static Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  static Future<Map<String, dynamic>> post(
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+      final res = await http
+          .post(uri, headers: _headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 15));
+      return _parse(res);
+    } catch (e) {
+      return {'success': false, 'message': 'Connection error: $e'};
+    }
   }
 
-  Widget _legendDot(Color c, String label) {
-    return Row(
-      children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ],
-    );
+  static Future<Map<String, dynamic>> get(
+    String endpoint, {
+    Map<String, String>? params,
+  }) async {
+    try {
+      var uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+      if (params != null) uri = uri.replace(queryParameters: params);
+      final res = await http
+          .get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      return _parse(res);
+    } catch (e) {
+      return {'success': false, 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> patch(
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+      final res = await http
+          .patch(uri, headers: _headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 15));
+      return _parse(res);
+    } catch (e) {
+      return {'success': false, 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Map<String, dynamic> _parse(http.Response res) {
+    try {
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 200 && res.statusCode < 300)
+        return {'success': true, ...decoded};
+      return {
+        'success': false,
+        'message':
+            decoded['message'] ??
+            decoded['detail'] ??
+            'Error ${res.statusCode}',
+      };
+    } catch (_) {
+      return {'success': false, 'message': 'Invalid server response'};
+    }
   }
 }
 
-class _BankCard extends StatefulWidget {
-  final BloodBank bank;
-  const _BankCard({required this.bank});
-
+// ── SHARED WIDGETS ────────────────────────────────────────────
+class InfoRedzAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String title;
+  final List<Widget>? actions;
+  const InfoRedzAppBar({super.key, required this.title, this.actions});
   @override
-  State<_BankCard> createState() => _BankCardState();
-}
-
-class _BankCardState extends State<_BankCard> {
-  bool _expanded = false;
-
+  Size get preferredSize => const Size.fromHeight(60);
   @override
-  Widget build(BuildContext context) {
-    final b = widget.bank;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: b.open ? AppColors.crimson.withOpacity(0.2) : Colors.transparent),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 46, height: 46,
-                      decoration: BoxDecoration(
-                        color: AppColors.crimson.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.local_hospital_rounded, color: AppColors.crimson, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(b.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_rounded, size: 12, color: AppColors.textMuted),
-                              const SizedBox(width: 3),
-                              Expanded(child: Text(b.city, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textMuted),
-                              const SizedBox(width: 3),
-                              Text(b.timing, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (b.open ? AppColors.success : AppColors.textMuted).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(b.open ? 'OPEN' : 'CLOSED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: b.open ? AppColors.success : AppColors.textMuted)),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(Icons.star_rounded, size: 13, color: AppColors.warning),
-                            const SizedBox(width: 2),
-                            Text(b.rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+  Widget build(BuildContext context) => AppBar(
+    backgroundColor: AppColors.white,
+    elevation: 0,
+    title: RichText(
+      text: TextSpan(
+        children: title == 'Inforedz'
+            ? const [
+                TextSpan(
+                  text: 'Info',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.inkDark,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-                const SizedBox(height: 14),
-                // Mini stock row (4 groups)
-                Row(
-                  children: b.stock.entries.take(4).map((e) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6), child: StockChip(group: e.key, units: e.value)))).toList(),
+                TextSpan(
+                  text: 'redz',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.rose,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-                if (_expanded) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: b.stock.entries.skip(4).map((e) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6), child: StockChip(group: e.key, units: e.value)))).toList(),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Expanded(child: Text(b.address, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.crimson),
-                            foregroundColor: AppColors.crimson,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          icon: const Icon(Icons.call_rounded, size: 15),
-                          label: const Text('Call', style: TextStyle(fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.crimson,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          icon: const Icon(Icons.directions_rounded, size: 15),
-                          label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_expanded ? 'Show Less' : 'Show All Stock & Details', style: const TextStyle(fontSize: 12, color: AppColors.crimson, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 4),
-                      Icon(_expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: AppColors.crimson),
-                    ],
+              ]
+            : [
+                TextSpan(
+                  text: title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.inkDark,
+                    fontFamily: 'Poppins',
                   ),
                 ),
               ],
-            ),
+      ),
+    ),
+    actions: actions,
+    bottom: PreferredSize(
+      preferredSize: const Size.fromHeight(1),
+      child: Container(height: 1, color: AppColors.divider),
+    ),
+  );
+}
+
+class BloodBadge extends StatelessWidget {
+  final String type;
+  final double size;
+  const BloodBadge({super.key, required this.type, this.size = 13});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.symmetric(horizontal: size * 0.7, vertical: size * 0.3),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [AppColors.rose, AppColors.roseDark],
+      ),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      type,
+      style: TextStyle(
+        fontSize: size,
+        fontWeight: FontWeight.w900,
+        color: Colors.white,
+      ),
+    ),
+  );
+}
+
+class AppCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final VoidCallback? onTap;
+  final Color? borderColor;
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.onTap,
+    this.borderColor,
+  });
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: borderColor ?? AppColors.divider,
+          width: borderColor != null ? 1.5 : 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-    );
-  }
+      child: child,
+    ),
+  );
 }
