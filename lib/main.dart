@@ -311,7 +311,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _bankPhoneCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   String _gender = 'Male';
-  String _lastDonated = 'Never';
+DateTime? _lastDonatedDate;
   bool _hasCondition = false;
 
   @override
@@ -415,8 +415,7 @@ class _AuthScreenState extends State<AuthScreen> {
         'age': _ageCtrl.text.trim(),
         'gender': _gender,
         'weight': _weightCtrl.text.trim(),
-        'last_donated': _lastDonated,
-        'has_condition': _hasCondition.toString(),
+'last_donated': _lastDonatedDate != null ? _lastDonatedDate!.toIso8601String().split('T')[0] : '',        'has_condition': _hasCondition.toString(),
       });
     } else {
       base.addAll({
@@ -1063,33 +1062,68 @@ class _AuthScreenState extends State<AuthScreen> {
     ],
   );
 
-  Widget _lastDonatedDropdown() {
-    const opts = [
-      'Never',
-      'Less than 3 months ago',
-      '3-6 months ago',
-      'More than 6 months ago',
-    ];
-    return DropdownButtonFormField<String>(
-      value: _lastDonated,
-      decoration: const InputDecoration(
-        labelText: 'Last donated blood',
-        prefixIcon: Icon(Icons.history_rounded, size: 18),
-      ),
-      items: opts
-          .map(
-            (o) => DropdownMenuItem(
-              value: o,
-              child: Text(o, style: const TextStyle(fontSize: 13)),
+Widget _lastDonatedDropdown() {
+  return GestureDetector(
+    onTap: () async {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: _lastDonatedDate ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime.now(),
+        builder: (context, child) => Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.rose,
+              onPrimary: Colors.white,
+              onSurface: AppColors.inkDark,
             ),
-          )
-          .toList(),
-      onChanged: (v) {
-        if (v != null) setState(() => _lastDonated = v);
-      },
-    );
-  }
+          ),
+          child: child!,
+        ),
+      );
+      if (picked != null) {
+        setState(() => _lastDonatedDate = picked);
+      }
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.offWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _lastDonatedDate != null ? AppColors.rose : AppColors.divider,
+          width: _lastDonatedDate != null ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month_rounded, size: 18,
+            color: _lastDonatedDate != null ? AppColors.rose : AppColors.inkLight),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _lastDonatedDate != null
+                  ? 'Last donated: ${_formatDate(_lastDonatedDate!)}'
+                  : 'Last donation date (tap to select)',
+              style: TextStyle(
+                fontSize: 13,
+                color: _lastDonatedDate != null ? AppColors.textBody : AppColors.textMuted,
+              ),
+            ),
+          ),
+          if (_lastDonatedDate != null)
+            GestureDetector(
+              onTap: () => setState(() => _lastDonatedDate = null),
+              child: const Icon(Icons.clear_rounded, size: 16, color: AppColors.textMuted),
+            ),
+        ],
+      ),
+    ),
+  );
+}
 
+String _formatDate(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   Widget _conditionToggle() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(

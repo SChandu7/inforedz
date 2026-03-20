@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'main.dart';
 import 'donor_tab.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────
 // BLOOD BANK MODEL
@@ -435,9 +436,21 @@ class _BankCard extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        _miniBtn(Icons.call_rounded, 'Call', () {}),
-        const SizedBox(width: 8),
-        _miniBtn(Icons.directions_rounded, 'Navigate', () {}),
+       _miniBtn(Icons.call_rounded, 'Call', () async {
+  final cleaned = bank.phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+  final uri = Uri(scheme: 'tel', path: cleaned);
+  if (await canLaunchUrl(uri)) await launchUrl(uri);
+}),
+const SizedBox(width: 8),
+_miniBtn(Icons.directions_rounded, 'Navigate', () async {
+  final Uri uri;
+  if (bank.lat != null && bank.lng != null) {
+    uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${bank.lat},${bank.lng}&travelmode=driving');
+  } else {
+    uri = Uri.parse('https://www.google.com/maps/search/${Uri.encodeComponent(bank.name)}');
+  }
+  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+}),
       ],
     );
   }
@@ -724,46 +737,59 @@ class BloodBankDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () {},
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.rose,
-              side: const BorderSide(color: AppColors.rose),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            icon: const Icon(Icons.call_rounded, size: 18),
-            label: const Text(
-              'Call Bank',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
+Widget _buildActionButtons() {
+  return Row(
+    children: [
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => _callBank(bank.phone),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.rose,
+            side: const BorderSide(color: AppColors.rose),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
+          icon: const Icon(Icons.call_rounded, size: 18),
+          label: const Text('Call Bank', style: TextStyle(fontWeight: FontWeight.w700)),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.rose,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            icon: const Icon(Icons.directions_rounded, size: 18),
-            label: const Text(
-              'Navigate',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: ElevatedButton.icon(
+          onPressed: () => _navigateToBank(bank.lat, bank.lng, bank.name),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.rose,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
+          icon: const Icon(Icons.directions_rounded, size: 18),
+          label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.w700)),
         ),
-      ],
-    );
+      ),
+    ],
+  );
+}
+
+Future<void> _callBank(String phone) async {
+  if (phone.isEmpty) return;
+  final cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+  final uri = Uri(scheme: 'tel', path: cleaned);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
   }
+}
+
+Future<void> _navigateToBank(double? lat, double? lng, String name) async {
+  Uri uri;
+  if (lat != null && lng != null) {
+    // open exact coordinates in Google Maps
+    uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+  } else {
+    // fallback — search by name
+    uri = Uri.parse('https://www.google.com/maps/search/${Uri.encodeComponent(name)}');
+  }
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
 }

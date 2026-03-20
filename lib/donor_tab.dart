@@ -75,8 +75,9 @@ class _DonorTabState extends State<DonorTab> {
   List<DonorModel> _filtered = [];
   bool _loading = true;
   String _selectedGroup = 'All';
-  final _searchCtrl = TextEditingController();
-  final _types = ['All', 'O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+bool _showOnlyAvailable = false;   // ← add
+final _searchCtrl = TextEditingController();
+final _types = ['All', 'O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
   Timer? _debounce;
 
   bool _initialLoadDone = false;
@@ -155,21 +156,20 @@ Future<void> _silentRefresh() async {
     _debounce = Timer(const Duration(milliseconds: 300), _applyFilter);
   }
 
-  void _applyFilter() {
-    final q = _searchCtrl.text.toLowerCase();
-    setState(() {
-      _filtered = _allDonors.where((d) {
-        final matchGroup =
-            _selectedGroup == 'All' || d.bloodGroup == _selectedGroup;
-        final matchSearch =
-            q.isEmpty ||
-            d.name.toLowerCase().contains(q) ||
-            d.city.toLowerCase().contains(q) ||
-            d.bloodGroup.toLowerCase().contains(q);
-        return matchGroup && matchSearch;
-      }).toList();
-    });
-  }
+ void _applyFilter() {
+  final q = _searchCtrl.text.toLowerCase();
+  setState(() {
+    _filtered = _allDonors.where((d) {
+      final matchGroup     = _selectedGroup == 'All' || d.bloodGroup == _selectedGroup;
+      final matchAvailable = !_showOnlyAvailable || d.available;   // ← add
+      final matchSearch    = q.isEmpty ||
+          d.name.toLowerCase().contains(q) ||
+          d.city.toLowerCase().contains(q) ||
+          d.bloodGroup.toLowerCase().contains(q);
+      return matchGroup && matchAvailable && matchSearch;
+    }).toList();
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -304,15 +304,15 @@ Future<void> _silentRefresh() async {
     );
   }
 
-  Widget _buildFilterChips() {
-    return SizedBox(
-      height: 48,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-        itemCount: _types.length,
-        itemBuilder: (_, i) {
-          final t = _types[i];
+ Widget _buildFilterChips() {
+  return SizedBox(
+    height: 48,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      children: [
+        // ── blood type chips ──────────────────────────────
+        ..._types.map((t) {
           final sel = t == _selectedGroup;
           return GestureDetector(
             onTap: () {
@@ -325,32 +325,64 @@ Future<void> _silentRefresh() async {
               decoration: BoxDecoration(
                 color: sel ? AppColors.rose : AppColors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: sel ? AppColors.rose : AppColors.divider,
-                ),
-                boxShadow: sel
-                    ? [
-                        BoxShadow(
-                          color: AppColors.rose.withOpacity(0.25),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : [],
+                border: Border.all(color: sel ? AppColors.rose : AppColors.divider),
+                boxShadow: sel ? [BoxShadow(color: AppColors.rose.withOpacity(0.25), blurRadius: 8)] : [],
               ),
-              child: Text(
-                t,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: sel ? Colors.white : AppColors.textMuted,
-                ),
-              ),
+              child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : AppColors.textMuted)),
             ),
           );
-        },
-      ),
-    );
-  }
+        }),
+
+        // ── divider ───────────────────────────────────────
+        Container(
+          width: 1, height: 24,
+          margin: const EdgeInsets.only(right: 8, top: 4),
+          color: AppColors.divider,
+        ),
+
+        // ── available chip ────────────────────────────────
+        GestureDetector(
+          onTap: () {
+            setState(() => _showOnlyAvailable = !_showOnlyAvailable);
+            _applyFilter();
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: _showOnlyAvailable ? AppColors.success : AppColors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _showOnlyAvailable ? AppColors.success : AppColors.divider),
+              boxShadow: _showOnlyAvailable ? [BoxShadow(color: AppColors.success.withOpacity(0.25), blurRadius: 8)] : [],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7, height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _showOnlyAvailable ? Colors.white : AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Available',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _showOnlyAvailable ? Colors.white : AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildList() {
     if (_filtered.isEmpty) return _buildEmpty();
@@ -807,10 +839,10 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
   List<Map<String, dynamic>> _donorData = [];
   List<Map<String, dynamic>> _bankData = [];
 
-  static const _initialCamera = CameraPosition(
-    target: LatLng(20.5937, 78.9629), // India center
-    zoom: 5,
-  );
+ static const _initialCamera = CameraPosition(
+  target: LatLng(20.5937, 78.9629),
+  zoom: 5,
+);
 
   @override
   void initState() {
@@ -919,7 +951,10 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: false,
                   mapType: MapType.normal,
-                  onMapCreated: (c) => _mapController.complete(c),
+                 onMapCreated: (c) {
+  _mapController.complete(c);
+  _zoomToUserLocation();   // ← auto zoom on map open
+},
                 ),
           // Filter toggles
           Positioned(
@@ -1029,10 +1064,23 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
     ],
   );
 
-  Future<void> _goToMyLocation() async {
+  Future<void> _zoomToUserLocation() async {
+  try {
     final ctrl = await _mapController.future;
-    ctrl.animateCamera(
-      CameraUpdate.newLatLngZoom(const LatLng(20.5937, 78.9629), 12),
-    );
-  }
+    // try GPS first
+    final pos = await LocationService.getCurrentPosition();
+    if (pos != null && mounted) {
+      ctrl.animateCamera(CameraUpdate.newLatLngZoom(
+        LatLng(pos.latitude, pos.longitude), 12,
+      ));
+      return;
+    }
+    // fallback — use saved lat/lng from AuthState profile if GPS fails
+    // just stay at India view
+  } catch (_) {}
+}
+
+Future<void> _goToMyLocation() async {
+  _zoomToUserLocation();
+}
 }

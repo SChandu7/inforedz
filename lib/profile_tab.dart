@@ -486,7 +486,7 @@ class _ProfileTabState extends State<ProfileTab> {
     // optimistic update
     setState(() => _profile['is_open'] = val);
 
-    final res = await ApiService.patch('profile/', {
+    final res = await ApiService.patch('/profile/', {
       'user_id': AuthState.userId,   // ← was missing
       'is_open': val,
     });
@@ -669,7 +669,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
  Future<void> _saveStock(Map<String, dynamic> stock) async {
   setState(() => _isSaving = true);
-  final res = await ApiService.patch('/auth/profile/', {
+  final res = await ApiService.patch('/profile/', {
     'user_id': AuthState.userId,   // ← was missing
     'stock': stock,
   });
@@ -749,7 +749,8 @@ class _EditDonorCard extends StatefulWidget {
 class _EditDonorCardState extends State<_EditDonorCard> {
   bool _expanded = false;
   late TextEditingController _nameCtrl, _cityCtrl, _ageCtrl, _weightCtrl;
-  late String _gender, _bloodGroup, _lastDonated;
+  late String _gender, _bloodGroup;
+DateTime? _lastDonatedDate;
   bool _hasCondition = false;
 
   @override
@@ -762,7 +763,8 @@ class _EditDonorCardState extends State<_EditDonorCard> {
     _weightCtrl = TextEditingController(text: '${p['weight'] ?? ''}');
     _gender = p['gender'] ?? 'Male';
     _bloodGroup = p['blood_group'] ?? AuthState.bloodGroup ?? 'O+';
-    _lastDonated = p['last_donated'] ?? 'Never';
+   final raw = p['last_donated'] ?? '';
+_lastDonatedDate = raw.isNotEmpty ? DateTime.tryParse(raw) : null;
     _hasCondition = p['has_condition'] ?? false;
   }
 
@@ -911,31 +913,67 @@ class _EditDonorCardState extends State<_EditDonorCard> {
   }
 
   Widget _lastDonatedDrop() {
-    const opts = [
-      'Never',
-      'Less than 3 months ago',
-      '3-6 months ago',
-      'More than 6 months ago',
-    ];
-    return DropdownButtonFormField<String>(
-      value: _lastDonated,
-      decoration: const InputDecoration(
-        labelText: 'Last Donated',
-        prefixIcon: Icon(Icons.history_rounded, size: 18),
-      ),
-      items: opts
-          .map(
-            (o) => DropdownMenuItem(
-              value: o,
-              child: Text(o, style: const TextStyle(fontSize: 12)),
+  return GestureDetector(
+    onTap: () async {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: _lastDonatedDate ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime.now(),
+        builder: (context, child) => Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.rose,
+              onPrimary: Colors.white,
+              onSurface: AppColors.inkDark,
             ),
-          )
-          .toList(),
-      onChanged: (v) {
-        if (v != null) setState(() => _lastDonated = v);
-      },
-    );
-  }
+          ),
+          child: child!,
+        ),
+      );
+      if (picked != null) {
+        setState(() => _lastDonatedDate = picked);
+      }
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.offWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _lastDonatedDate != null ? AppColors.rose : AppColors.divider,
+          width: _lastDonatedDate != null ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month_rounded, size: 18,
+            color: _lastDonatedDate != null ? AppColors.rose : AppColors.inkLight),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _lastDonatedDate != null
+                  ? 'Last donated: ${_fmtDate(_lastDonatedDate!)}'
+                  : 'Last donation date (tap to select)',
+              style: TextStyle(
+                fontSize: 13,
+                color: _lastDonatedDate != null ? AppColors.textBody : AppColors.textMuted,
+              ),
+            ),
+          ),
+          if (_lastDonatedDate != null)
+            GestureDetector(
+              onTap: () => setState(() => _lastDonatedDate = null),
+              child: const Icon(Icons.clear_rounded, size: 16, color: AppColors.textMuted),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+String _fmtDate(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   Widget _conditionRow() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -969,7 +1007,7 @@ class _EditDonorCardState extends State<_EditDonorCard> {
       'weight': int.tryParse(_weightCtrl.text) ?? 0,
       'gender': _gender,
       'blood_group': _bloodGroup,
-      'last_donated': _lastDonated,
+'last_donated': _lastDonatedDate != null ? _lastDonatedDate!.toIso8601String().split('T')[0] : '',
       'has_condition': _hasCondition,
     });
   }
