@@ -14,9 +14,11 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _fadeCtrl;
   late AnimationController _pulseCtrl;
   late AnimationController _textCtrl;
+  late AnimationController _letterCtrl;
+  late AnimationController _colorCtrl;
 
-  late Animation<double> _dropY;
-  late Animation<double> _dropScale;
+  late Animation<double> _logoFade;
+  late Animation<double> _logoScale;
   late Animation<double> _ripple;
   late Animation<double> _fade;
   late Animation<double> _pulse;
@@ -43,15 +45,27 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
+    _letterCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _colorCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
 
-    _dropY = Tween(
-      begin: -80.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(parent: _dropCtrl, curve: Curves.bounceOut));
-    _dropScale = Tween(
-      begin: 0.6,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _dropCtrl, curve: Curves.elasticOut));
+    _logoFade = Tween(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _dropCtrl,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeIn),
+      ),
+    );
+    _logoScale = Tween(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _dropCtrl,
+        curve: const Interval(0.0, 1.0, curve: Curves.easeOutBack),
+      ),
+    );
     _ripple = Tween(
       begin: 0.0,
       end: 1.0,
@@ -73,11 +87,14 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _startSequence() async {
     await Future.delayed(const Duration(milliseconds: 300));
     _dropCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 700));
     _fadeCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 400));
     _textCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 1800));
+    _letterCtrl.forward(); // ← start letter animation
+    await Future.delayed(const Duration(milliseconds: 1000));
+    _colorCtrl.forward(); // ← color change after all letters visible
+    await Future.delayed(const Duration(milliseconds: 1700));
     _navigate();
   }
 
@@ -102,37 +119,129 @@ class _SplashScreenState extends State<SplashScreen>
     _fadeCtrl.dispose();
     _pulseCtrl.dispose();
     _textCtrl.dispose();
+    _letterCtrl.dispose();
+    _colorCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     return Scaffold(
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFFFF), Color(0xFFFFF0F0), Color(0xFFFFE4E4)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFFFFF),
+              Color(0xFFFFF4F4),
+              Color(0xFFFFE8E8),
+              Color(0xFFFFD6D6),
+            ],
           ),
         ),
         child: Stack(
           children: [
-            // Background medical cross pattern
+            // ── decorative red circle top right ──────────────
+            Positioned(
+              top: -60,
+              right: -60,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.rose.withOpacity(0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 20,
+              right: 20,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.rose.withOpacity(0.05),
+                ),
+              ),
+            ),
+
+            // ── decorative circle bottom left ─────────────────
+            Positioned(
+              bottom: -80,
+              left: -80,
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.rose.withOpacity(0.07),
+                ),
+              ),
+            ),
+
+            // ── medical cross pattern ─────────────────────────
             ..._buildBgPattern(),
-            // Center content
-            Center(
+
+            // ── red top accent line ───────────────────────────
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(height: 4, color: AppColors.rose),
+            ),
+
+            // ── heartbeat line decoration ─────────────────────
+            Positioned(
+              top: size.height * 0.18,
+              left: 0,
+              right: 0,
+              child: Opacity(
+                opacity: 0.06,
+                child: CustomPaint(
+                  size: Size(size.width, 40),
+                  painter: _HeartbeatPainter(),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: size.height * 0.22,
+              left: 0,
+              right: 0,
+              child: Opacity(
+                opacity: 0.06,
+                child: CustomPaint(
+                  size: Size(size.width, 40),
+                  painter: _HeartbeatPainter(),
+                ),
+              ),
+            ),
+
+            // ── center content ────────────────────────────────
+            Positioned(
+              top:
+                  MediaQuery.of(context).size.height *
+                  0.28, // ← between top and middle
+              left: 0,
+              right: 0,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Animated drop + ripple
+                  const SizedBox(height: 0),
+                  // logo with drop animation
                   SizedBox(
-                    width: 160,
-                    height: 160,
+                    width: 180,
+                    height: 180,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // Ripple rings
+                        // ripple rings
                         AnimatedBuilder(
                           animation: _ripple,
                           builder: (_, __) => Stack(
@@ -145,13 +254,13 @@ class _SplashScreenState extends State<SplashScreen>
                                     1.0,
                                   );
                               return Container(
-                                width: 60 + prog * 80,
-                                height: 60 + prog * 80,
+                                width: 70 + prog * 90,
+                                height: 70 + prog * 90,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: AppColors.rose.withOpacity(
-                                      (1 - prog) * 0.25,
+                                      (1 - prog) * 0.2,
                                     ),
                                     width: 1.5,
                                   ),
@@ -160,13 +269,13 @@ class _SplashScreenState extends State<SplashScreen>
                             }).toList(),
                           ),
                         ),
-                        // Drop
+                        // logo drop
                         AnimatedBuilder(
                           animation: Listenable.merge([_dropCtrl, _pulseCtrl]),
-                          builder: (_, __) => Transform.translate(
-                            offset: Offset(0, _dropY.value),
+                          builder: (_, __) => FadeTransition(
+                            opacity: _logoFade,
                             child: Transform.scale(
-                              scale: _dropScale.value * _pulse.value,
+                              scale: _logoScale.value * _pulse.value,
                               child: _buildBloodDrop(),
                             ),
                           ),
@@ -174,76 +283,122 @@ class _SplashScreenState extends State<SplashScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  // App name
+
+                  const SizedBox(height: 1),
+
+                  // ── letter by letter app name ─────────────────
+                  AnimatedBuilder(
+                    animation: Listenable.merge([_letterCtrl, _colorCtrl]),
+                    builder: (_, __) {
+                      const fullText = 'InfoReDZ';
+                      const splitAt = 4; // 'Info' = 4 chars, 'ReDZ' = 4 chars
+                      final totalChars = fullText.length;
+                      final visibleCount = (_letterCtrl.value * totalChars)
+                          .ceil()
+                          .clamp(0, totalChars);
+                      final colorDone = _colorCtrl.value == 1.0;
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(visibleCount, (i) {
+                          final char = fullText[i];
+                          final isRed = i >= splitAt;
+
+                          // before color anim: all chars are inkDark
+                          // after color anim: first 4 = inkDark, last 4 = rose
+                          final color = colorDone
+                              ? (isRed ? AppColors.rose : AppColors.inkDark)
+                              : AppColors.inkDark;
+
+                          return AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 300),
+                            style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                              color: color,
+                              fontFamily: 'Poppins',
+                              letterSpacing: 1.0,
+                            ),
+                            child: Text(char),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // tagline fade in
                   FadeTransition(
                     opacity: _textFade,
-                    child: SlideTransition(
-                      position: _textSlide,
-                      child: Column(
-                        children: [
-                          RichText(
-                            text: const TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: 'Info',
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.inkDark,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: 'redz',
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.rose,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Every drop counts. Every life matters.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textMuted,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
+                    child: const Text(
+                      'Every drop counts. Every life matters.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textMuted,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            // Bottom tagline
+
+            // ── bottom pills ──────────────────────────────────
             Positioned(
-              bottom: 40,
+              bottom: 48,
               left: 0,
               right: 0,
               child: FadeTransition(
                 opacity: _textFade,
                 child: Column(
                   children: [
+                    // blood type badges row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _statPill('🩸', 'Donate Blood'),
-                        const SizedBox(width: 12),
-                        _statPill('🏥', 'Find Banks'),
-                        const SizedBox(width: 12),
-                        _statPill('❤️', 'Save Lives'),
-                      ],
+                      children:
+                          ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-']
+                              .map(
+                                (g) => Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.rose.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: AppColors.rose.withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    g,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.rose,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                     ),
+                    const SizedBox(height: 14),
                   ],
                 ),
               ),
+            ),
+
+            // ── bottom red accent ─────────────────────────────
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(height: 3, color: AppColors.rose),
             ),
           ],
         ),
@@ -255,20 +410,15 @@ class _SplashScreenState extends State<SplashScreen>
     return Container(
       width: 80,
       height: 80,
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(-0.3, -0.3),
-          colors: [Color(0xFFFF4444), AppColors.rose, AppColors.roseDark],
-        ),
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Color(0x55CC0000), blurRadius: 20, spreadRadius: 4),
+        border: Border.all(color: AppColors.rose, width: 3),
+        boxShadow: const [
+          BoxShadow(color: Color(0x55CC0000), blurRadius: 24, spreadRadius: 4),
         ],
       ),
-      child: const Icon(
-        Icons.water_drop_rounded,
-        color: Colors.white,
-        size: 38,
+      child: ClipOval(
+        child: Image.asset('assets/icon.jpeg', fit: BoxFit.cover),
       ),
     );
   }
@@ -321,4 +471,40 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
+}
+
+class _HeartbeatPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.rose
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    final w = size.width;
+    final h = size.height / 2;
+
+    path.moveTo(0, h);
+    path.lineTo(w * 0.15, h);
+    path.lineTo(w * 0.22, h - 14);
+    path.lineTo(w * 0.27, h + 14);
+    path.lineTo(w * 0.32, h - 22);
+    path.lineTo(w * 0.38, h + 22);
+    path.lineTo(w * 0.43, h - 10);
+    path.lineTo(w * 0.48, h);
+    path.lineTo(w * 0.63, h);
+    path.lineTo(w * 0.70, h - 14);
+    path.lineTo(w * 0.75, h + 14);
+    path.lineTo(w * 0.80, h - 22);
+    path.lineTo(w * 0.86, h + 22);
+    path.lineTo(w * 0.91, h - 10);
+    path.lineTo(w * 0.96, h);
+    path.lineTo(w, h);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
 }

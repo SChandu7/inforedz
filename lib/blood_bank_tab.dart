@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'main.dart';
 import 'donor_tab.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────
 // BLOOD BANK MODEL
@@ -113,14 +114,28 @@ class _BloodBankTabState extends State<BloodBankTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgPage,
-      appBar: InfoRedzAppBar(
-        title: 'Blood Banks',
+      appBar: AppBar(
+        backgroundColor: AppColors.rose,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Blood Banks',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.rose),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: _load,
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.roseDark),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
@@ -435,9 +450,26 @@ class _BankCard extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        _miniBtn(Icons.call_rounded, 'Call', () {}),
+        _miniBtn(Icons.call_rounded, 'Call', () async {
+          final cleaned = bank.phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+          final uri = Uri(scheme: 'tel', path: cleaned);
+          if (await canLaunchUrl(uri)) await launchUrl(uri);
+        }),
         const SizedBox(width: 8),
-        _miniBtn(Icons.directions_rounded, 'Navigate', () {}),
+        _miniBtn(Icons.directions_rounded, 'Navigate', () async {
+          final Uri uri;
+          if (bank.lat != null && bank.lng != null) {
+            uri = Uri.parse(
+              'https://www.google.com/maps/dir/?api=1&destination=${bank.lat},${bank.lng}&travelmode=driving',
+            );
+          } else {
+            uri = Uri.parse(
+              'https://www.google.com/maps/search/${Uri.encodeComponent(bank.name)}',
+            );
+          }
+          if (await canLaunchUrl(uri))
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }),
       ],
     );
   }
@@ -729,7 +761,7 @@ class BloodBankDetailScreen extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () => _callBank(bank.phone),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.rose,
               side: const BorderSide(color: AppColors.rose),
@@ -748,7 +780,7 @@ class BloodBankDetailScreen extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => _navigateToBank(bank.lat, bank.lng, bank.name),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.rose,
               shape: RoundedRectangleBorder(
@@ -765,5 +797,32 @@ class BloodBankDetailScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _callBank(String phone) async {
+    if (phone.isEmpty) return;
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+    final uri = Uri(scheme: 'tel', path: cleaned);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _navigateToBank(double? lat, double? lng, String name) async {
+    Uri uri;
+    if (lat != null && lng != null) {
+      // open exact coordinates in Google Maps
+      uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+      );
+    } else {
+      // fallback — search by name
+      uri = Uri.parse(
+        'https://www.google.com/maps/search/${Uri.encodeComponent(name)}',
+      );
+    }
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }

@@ -10,6 +10,7 @@ import 'splash_screen.dart';
 import 'donor_tab.dart';
 import 'blood_bank_tab.dart';
 import 'profile_tab.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,7 @@ class AppColors {
   static const warningBg = Color(0xFFFFF7ED);
   static const danger = Color(0xFFDC2626);
   static const shadow = Color(0x14CC0000);
+  static const bgCard2 = Color(0xFFF0E8E8);
 }
 
 class ApiConfig {
@@ -59,6 +61,7 @@ class AuthState {
   static String? bloodGroup;
   static String? bankName;
   static bool isLoggedIn = false;
+  static bool get isGuest => role == 'guest';
 
   static Future<void> loadFromPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -145,7 +148,7 @@ class InforedzApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Inforedz',
+      title: 'InfoREDZ',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: AppColors.bgPage,
@@ -297,6 +300,7 @@ class _AuthScreenState extends State<AuthScreen> {
   String _locStatus = '';
   double? _capturedLat;
   double? _capturedLng;
+  bool _termsAccepted = false;
 
   final _formKey = GlobalKey<FormState>();
   final _phoneCtrl = TextEditingController();
@@ -311,7 +315,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _bankPhoneCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   String _gender = 'Male';
-  String _lastDonated = 'Never';
+  DateTime? _lastDonatedDate;
   bool _hasCondition = false;
 
   @override
@@ -360,6 +364,16 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_isLogin && !_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please accept the Terms & Conditions to continue'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       final endpoint = _isLogin ? '/login/' : '/register/';
@@ -415,7 +429,9 @@ class _AuthScreenState extends State<AuthScreen> {
         'age': _ageCtrl.text.trim(),
         'gender': _gender,
         'weight': _weightCtrl.text.trim(),
-        'last_donated': _lastDonated,
+        'last_donated': _lastDonatedDate != null
+            ? _lastDonatedDate!.toIso8601String().split('T')[0]
+            : '',
         'has_condition': _hasCondition.toString(),
       });
     } else {
@@ -466,9 +482,13 @@ class _AuthScreenState extends State<AuthScreen> {
                   if (_role == 'blood_bank') _bankFields(),
                 ],
                 const SizedBox(height: 28),
+                if (!_isLogin) _buildTermsCheckbox(),
+                if (!_isLogin) const SizedBox(height: 16),
                 _submitBtn(),
                 const SizedBox(height: 20),
                 _toggle(),
+                const SizedBox(height: 16),
+                if (_isLogin) _guestBtn(), // ← only show on login page
                 const SizedBox(height: 40),
               ],
             ),
@@ -477,6 +497,296 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+
+  Widget _buildTermsCheckbox() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: _termsAccepted,
+            activeColor: AppColors.rose,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            side: BorderSide(
+              color: _termsAccepted ? AppColors.rose : AppColors.textMuted,
+              width: 1.5,
+            ),
+            onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'I agree to the ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textMuted,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: GestureDetector(
+                      onTap: () => _openTermsPage(),
+                      child: const Text(
+                        'Terms & Conditions',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1565C0),
+                          decoration: TextDecoration.underline,
+                          decorationColor: Color(0xFF1565C0),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const TextSpan(
+                    text: ' and ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textMuted,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: GestureDetector(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://schandu7.github.io/infumedz/'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: const Text(
+                        'Privacy Policy',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1565C0),
+                          decoration: TextDecoration.underline,
+                          decorationColor: Color(0xFF1565C0),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openTermsPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.bgPage,
+          appBar: AppBar(
+            backgroundColor: AppColors.rose,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+            centerTitle: true,
+            title: const Text(
+              'Terms & Conditions',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.rosePale,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.rose.withOpacity(0.2)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.gavel_rounded,
+                        color: AppColors.rose,
+                        size: 20,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'INFOREDZ – TERMS AND CONDITIONS',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.roseDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ..._termsList().map(
+                  (t) => _termItem(t['num']!, t['title']!, t['body']!),
+                ),
+                const SizedBox(height: 30),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.rosePale,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'By using Inforedz, you acknowledge that you have read, understood, and agree to these Terms and Conditions.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.inkMid,
+                      height: 1.6,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, String>> _termsList() => [
+    {
+      'num': '1',
+      'title': 'Nature of Service',
+      'body':
+          'Inforedz is a digital platform that facilitates connection between blood donors, blood banks, and recipients. It does not collect, store, or supply blood and is not a medical service provider.',
+    },
+    {
+      'num': '2',
+      'title': 'User Responsibilities',
+      'body':
+          'All users must provide accurate and complete information and use the platform only for lawful and genuine purposes. Misuse may result in suspension or termination of access.',
+    },
+    {
+      'num': '3',
+      'title': 'Blood Donors',
+      'body':
+          'Donors must be medically eligible, provide truthful health information, and participate voluntarily without any financial compensation. Donors consent to being contacted for donation requests.',
+    },
+    {
+      'num': '4',
+      'title': 'Blood Banks',
+      'body':
+          'Blood banks must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution of blood, as well as maintaining accurate records.',
+    },
+    {
+      'num': '5',
+      'title': 'Recipients / Customers',
+      'body':
+          'Users requesting blood must provide accurate details and use the platform strictly for legitimate medical needs. All procedures and transactions are subject to the policies of the respective blood banks or healthcare providers.',
+    },
+    {
+      'num': '6',
+      'title': 'Payments',
+      'body':
+          'Any charges related to blood or services are determined and collected by blood banks or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
+    },
+    {
+      'num': '7',
+      'title': 'Data Privacy',
+      'body':
+          'Inforedz maintains reasonable measures to protect user data. Information may be shared with relevant parties only for facilitating services.',
+    },
+    {
+      'num': '8',
+      'title': 'Disclaimer of Liability',
+      'body':
+          'Inforedz does not guarantee availability of blood or donors and shall not be held liable for any medical outcomes, delays, or actions of third parties.',
+    },
+    {
+      'num': '9',
+      'title': 'Account Control',
+      'body':
+          'Inforedz reserves the right to suspend or terminate accounts in case of false information, misuse, or violation of these terms.',
+    },
+    {
+      'num': '10',
+      'title': 'Acceptance',
+      'body':
+          'Continued use of the platform constitutes acceptance of these Terms and Conditions.',
+    },
+  ];
+
+  Widget _termItem(String num, String title, String body) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppColors.rose,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              num,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.inkDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textBody,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _header() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,7 +820,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ),
                 TextSpan(
-                  text: 'redz',
+                  text: 'REDZ',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -1064,32 +1374,80 @@ class _AuthScreenState extends State<AuthScreen> {
   );
 
   Widget _lastDonatedDropdown() {
-    const opts = [
-      'Never',
-      'Less than 3 months ago',
-      '3-6 months ago',
-      'More than 6 months ago',
-    ];
-    return DropdownButtonFormField<String>(
-      value: _lastDonated,
-      decoration: const InputDecoration(
-        labelText: 'Last donated blood',
-        prefixIcon: Icon(Icons.history_rounded, size: 18),
-      ),
-      items: opts
-          .map(
-            (o) => DropdownMenuItem(
-              value: o,
-              child: Text(o, style: const TextStyle(fontSize: 13)),
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: _lastDonatedDate ?? DateTime.now(),
+          firstDate: DateTime(2000),
+          lastDate: DateTime.now(),
+          builder: (context, child) => Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: AppColors.rose,
+                onPrimary: Colors.white,
+                onSurface: AppColors.inkDark,
+              ),
             ),
-          )
-          .toList(),
-      onChanged: (v) {
-        if (v != null) setState(() => _lastDonated = v);
+            child: child!,
+          ),
+        );
+        if (picked != null) {
+          setState(() => _lastDonatedDate = picked);
+        }
       },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.offWhite,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _lastDonatedDate != null
+                ? AppColors.rose
+                : AppColors.divider,
+            width: _lastDonatedDate != null ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_month_rounded,
+              size: 18,
+              color: _lastDonatedDate != null
+                  ? AppColors.rose
+                  : AppColors.inkLight,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _lastDonatedDate != null
+                    ? 'Last donated: ${_formatDate(_lastDonatedDate!)}'
+                    : 'Last donation date (tap to select)',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _lastDonatedDate != null
+                      ? AppColors.textBody
+                      : AppColors.textMuted,
+                ),
+              ),
+            ),
+            if (_lastDonatedDate != null)
+              GestureDetector(
+                onTap: () => setState(() => _lastDonatedDate = null),
+                child: const Icon(
+                  Icons.clear_rounded,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   Widget _conditionToggle() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
@@ -1174,6 +1532,62 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     ),
   );
+  Widget _guestBtn() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: AppColors.divider)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'or',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ),
+            Expanded(child: Divider(color: AppColors.divider)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              AuthState.userId = null;
+              AuthState.email = null;
+              AuthState.role = 'guest';
+              AuthState.name = 'Guest';
+              AuthState.isLoggedIn = false; // guest = not logged in
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.divider),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const Icon(
+              Icons.person_outline_rounded,
+              color: AppColors.textMuted,
+              size: 20,
+            ),
+            label: const Text(
+              'Continue as Guest',
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ── API SERVICE ───────────────────────────────────────────────
@@ -1272,7 +1686,7 @@ class InfoRedzAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 TextSpan(
-                  text: 'redz',
+                  text: 'REDZ',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
