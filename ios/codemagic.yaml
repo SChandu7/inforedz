@@ -36,9 +36,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        api_key: MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg9fFxye7d3FXG8S84dkoujLUiCiTchMZvS54J7AIRnYmhRANCAAR3J4Mu3LpU4afDKW8DJHgCrvTA018WZgLAhYBG3Ti1ODWi1uKV6nshMcDKBDficBU+FfJGAWPMUuBQA5bW9Nxh
+        key_id: U7BNRS28BN
+        issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
         submit_to_testflight: true
         submit_to_app_store: false
 ```
