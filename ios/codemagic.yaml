@@ -41,14 +41,4 @@ workflows:
         issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
         submit_to_testflight: true
         submit_to_app_store: false
-```
 
----
-
-# ✅ After pasting all 4 files — do this next:
-```
-1. Git add, commit, push  →  your code is on GitHub
-2. Apple Dev Portal       →  register Bundle ID: com.inforedz.app
-3. App Store Connect      →  create app with same Bundle ID
-4. Codemagic              →  add API keys from App Store Connect
-5. Codemagic              →  trigger build
