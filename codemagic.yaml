@@ -36,7 +36,7 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg9fFxye7d3FXG8S84dkoujLUiCiTchMZvS54J7AIRnYmhRANCAAR3J4Mu3LpU4afDKW8DJHgCrvTA018WZgLAhYBG3Ti1ODWi1uKV6nshMcDKBDficBU+FfJGAWPMUuBQA5bW9Nxh
+        api_key: MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg/cHXzauCYCotTJ0uCdogp+qmF3Bvx2BowUjqfeEkLHCgCgYIKoZIzj0DAQehRANCAAST2Et4IJxFrU6SfkD8UpOzKtmUb4wAK3spjfJdv2SGvEdKnV4zrufP78XFu5LiaNAUxWtvcRAWQ6y70h+WlsK6
         key_id: U7BNRS28BN
         issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
         submit_to_testflight: true
