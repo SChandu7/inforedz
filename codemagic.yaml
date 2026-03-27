@@ -1,0 +1,43 @@
+workflows:
+  ios-release:
+    name: iOS Release - Inforedz
+    max_build_duration: 60
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.inforedz.app
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+        BUNDLE_ID: "com.inforedz.app"
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter packages pub get
+
+      - name: Pod install
+        script: find . -name "Podfile" -execdir pod install \;
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        api_key: MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg/cHXzauCYCotTJ0uCdogp+qmF3Bvx2BowUjqfeEkLHCgCgYIKoZIzj0DAQehRANCAAST2Et4IJxFrU6SfkD8UpOzKtmUb4wAK3spjfJdv2SGvEdKnV4zrufP78XFu5LiaNAUxWtvcRAWQ6y70h+WlsK6
+        key_id: U7BNRS28BN
+        issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
+        submit_to_testflight: true
+        submit_to_app_store: false
