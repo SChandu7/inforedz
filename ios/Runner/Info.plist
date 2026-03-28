@@ -10,10 +10,10 @@
     <string>com.inforedz.app</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>1.0.1</string>
+    <string>1.0.2</string>
 
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
 
     <key>GMSApiKey</key>
 <string>AIzaSyD02N7Yl8w0rpsPc2L-78qDw9apVnfDOdY</string>
