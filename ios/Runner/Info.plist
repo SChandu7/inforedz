@@ -19,7 +19,7 @@
     <string>APPL</string>
 
     <key>MinimumOSVersion</key>
-<string>14.0</string>
+    <string>14.0</string>
 
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
@@ -56,6 +56,21 @@
 
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>This app uses your location to provide relevant medical content and services near you.</string>
+
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>This app uses your location to provide relevant medical content and services near you.</string>
+
+    <key>NSCameraUsageDescription</key>
+    <string>This app uses the camera to allow you to upload profile and content images.</string>
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>This app accesses your photo library to allow you to upload images.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app uses the microphone for video recording features.</string>
 
 </dict>
 </plist>
