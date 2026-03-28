@@ -36,8 +36,14 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg/cHXzauCYCotTJ0uCdogp+qmF3Bvx2BowUjqfeEkLHCgCgYIKoZIzj0DAQehRANCAAST2Et4IJxFrU6SfkD8UpOzKtmUb4wAK3spjfJdv2SGvEdKnV4zrufP78XFu5LiaNAUxWtvcRAWQ6y70h+WlsK6
-        key_id: U7BNRS28BN
+        api_key: |
+          -----BEGIN PRIVATE KEY-----
+          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgEhwFwNbUTjGa2vPm
+          dIPL941Zz9VpYMDVARNNvYbG2sGgCgYIKoZIzj0DAQehRANCAARIf2pSwc6XLHoG
+          QsFFjYExwpmAuMtU6C0dveYB2g1jT4bg3mV0N0Qf1Jr7A3KAoiphtQuvdb0CBMj6
+          7lv37Wzb
+          -----END PRIVATE KEY-----
+        key_id: 667K6D7X4G
         issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
         submit_to_testflight: true
         submit_to_app_store: false
