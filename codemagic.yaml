@@ -1,49 +1,32 @@
 workflows:
-  ios-release:
-    name: iOS Release - Inforedz
+  ios-simulator:
+    name: iOS Simulator - Appetize Testing
     max_build_duration: 60
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.inforedz.app
-      vars:
-        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
-        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
-        BUNDLE_ID: "com.inforedz.app"
       flutter: stable
       xcode: latest
       cocoapods: default
-
     scripts:
       - name: Get Flutter packages
         script: flutter packages pub get
 
       - name: Pod install
-        script: find . -name "Podfile" -execdir pod install \;
-
-      - name: Set up code signing
-        script: xcode-project use-profiles
-
-      - name: Build iOS IPA
         script: |
-          flutter build ipa --release \
-            --export-options-plist=/Users/builder/export_options.plist
+          cd ios
+          pod install
+          cd ..
+
+      - name: Build iOS Simulator
+        script: |
+          flutter build ios \
+            --debug \
+            --simulator \
+            --no-codesign
+
+      - name: Zip Runner.app
+        script: |
+          cd build/ios/iphonesimulator
+          zip -r Runner.app.zip Runner.app
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-
-    publishing:
-      app_store_connect:
-        api_key: |
-          -----BEGIN PRIVATE KEY-----
-          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgEhwFwNbUTjGa2vPm
-          dIPL941Zz9VpYMDVARNNvYbG2sGgCgYIKoZIzj0DAQehRANCAARIf2pSwc6XLHoG
-          QsFFjYExwpmAuMtU6C0dveYB2g1jT4bg3mV0N0Qf1Jr7A3KAoiphtQuvdb0CBMj6
-          7lv37Wzb
-          -----END PRIVATE KEY-----
-        key_id: 667K6D7X4G
-        issuer_id: 41dc2b0f-ce3c-4669-be7a-a4097de4d9ce
-        submit_to_testflight: true
-        submit_to_app_store: false
+      - build/ios/iphonesimulator/Runner.app.zip
