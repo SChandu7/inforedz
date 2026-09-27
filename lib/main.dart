@@ -236,8 +236,8 @@ class _HomeScreenState extends State<HomeScreen> {
           height: 62,
           child: Row(
             children: [
-              _navItem(0, Icons.volunteer_activism_rounded, 'Donate Blood'),
-              _navItem(1, Icons.local_hospital_rounded, 'Blood Banks'),
+              _navItem(0, Icons.volunteer_activism_rounded, 'Contributors'),
+              _navItem(1, Icons.local_hospital_rounded, 'Centres'),
               _navItem(2, Icons.person_rounded, 'Profile'),
             ],
           ),
@@ -678,7 +678,7 @@ class _AuthScreenState extends State<AuthScreen> {
       'num': '1',
       'title': 'Nature of Service',
       'body':
-          'Inforedz is a digital platform that facilitates connection between blood donors, blood banks, and recipients. It does not collect, store, or supply blood and is not a medical service provider.',
+          'Inforedz is a digital platform that facilitates connection between  donors,  banks, and recipients. It does not collect, store, or supply  and is not a medical service provider.',
     },
     {
       'num': '2',
@@ -688,27 +688,27 @@ class _AuthScreenState extends State<AuthScreen> {
     },
     {
       'num': '3',
-      'title': 'Blood Donors',
+      'title': 'Contributors',
       'body':
-          'Donors must be medically eligible, provide truthful health information, and participate voluntarily without any financial compensation. Donors consent to being contacted for donation requests.',
+          'Contributors must confirm their eligibility, provide truthful information, and participate voluntarily without any financial compensation. Contributors consent to being contacted for requests.',
     },
     {
       'num': '4',
-      'title': 'Blood Banks',
+      'title': 'Centres',
       'body':
-          'Blood banks must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution of blood, as well as maintaining accurate records.',
+          'Centres must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution, as well as maintaining accurate records.',
     },
     {
       'num': '5',
       'title': 'Recipients / Customers',
       'body':
-          'Users requesting blood must provide accurate details and use the platform strictly for legitimate medical needs. All procedures and transactions are subject to the policies of the respective blood banks or healthcare providers.',
+          'Users posting requests must provide accurate details and use the platform strictly for legitimate purposes. All procedures are subject to the policies of the respective centres or healthcare providers.',
     },
     {
       'num': '6',
       'title': 'Payments',
       'body':
-          'Any charges related to blood or services are determined and collected by blood banks or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
+          'Any charges related to services are determined and collected by centres or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
     },
     {
       'num': '7',
@@ -720,7 +720,7 @@ class _AuthScreenState extends State<AuthScreen> {
       'num': '8',
       'title': 'Disclaimer of Liability',
       'body':
-          'Inforedz does not guarantee availability of blood or donors and shall not be held liable for any medical outcomes, delays, or actions of third parties.',
+          'Inforedz does not guarantee availability of contributors or centres and shall not be held liable for any outcomes, delays, or actions of third parties.',
     },
     {
       'num': '9',
@@ -844,9 +844,7 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
       const SizedBox(height: 4),
       Text(
-        _isLogin
-            ? 'Sign in to continue saving lives'
-            : 'Join the life-saving community',
+        _isLogin ? 'Sign in to continue' : 'Join our community',
         style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
       ),
     ],
@@ -866,9 +864,9 @@ class _AuthScreenState extends State<AuthScreen> {
       const SizedBox(height: 10),
       Row(
         children: [
-          _roleChip('donor', Icons.volunteer_activism_rounded, 'Blood Donor'),
+          _roleChip('donor', Icons.volunteer_activism_rounded, 'Contributor'),
           const SizedBox(width: 12),
-          _roleChip('blood_bank', Icons.local_hospital_rounded, 'Blood Bank'),
+          _roleChip('blood_bank', Icons.local_hospital_rounded, 'Centre'),
         ],
       ),
     ],
@@ -1207,7 +1205,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _donorFields() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _sectionLabel('🩸 Donor Details'),
+      _sectionLabel('📋 Contributor Details'),
       const SizedBox(height: 12),
       _bloodGroupDropdown(),
       const SizedBox(height: 12),
@@ -1242,7 +1240,6 @@ class _AuthScreenState extends State<AuthScreen> {
       _genderSelector(),
       const SizedBox(height: 12),
       _lastDonatedDropdown(),
-      const SizedBox(height: 12),
       const SizedBox(height: 14),
       TextFormField(
         controller: _phoneCtrl,
@@ -1262,12 +1259,12 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _bankFields() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _sectionLabel('🏥 Blood Bank Details'),
+      _sectionLabel('🏢 Centre Details'),
       const SizedBox(height: 12),
       TextFormField(
         controller: _bankNameCtrl,
         decoration: const InputDecoration(
-          labelText: 'Blood bank / organisation name',
+          labelText: 'Centre / Organisation name',
           prefixIcon: Icon(Icons.business_outlined, size: 18),
         ),
         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
@@ -1317,7 +1314,7 @@ class _AuthScreenState extends State<AuthScreen> {
     return DropdownButtonFormField<String>(
       value: _bloodCtrl.text.isEmpty ? null : _bloodCtrl.text,
       decoration: const InputDecoration(
-        labelText: 'Blood group',
+        labelText: 'Group type',
         prefixIcon: Icon(Icons.water_drop_outlined, size: 18),
       ),
       items: groups
@@ -1326,7 +1323,7 @@ class _AuthScreenState extends State<AuthScreen> {
       onChanged: (v) {
         if (v != null) _bloodCtrl.text = v;
       },
-      validator: (v) => v == null ? 'Select blood group' : null,
+      validator: (v) => v == null ? 'Select group type' : null,
     );
   }
 
@@ -1448,35 +1445,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
   String _formatDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  Widget _conditionToggle() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    decoration: BoxDecoration(
-      color: AppColors.offWhite,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppColors.divider),
-    ),
-    child: Row(
-      children: [
-        const Icon(
-          Icons.medical_information_outlined,
-          size: 18,
-          color: AppColors.inkLight,
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Text(
-            'I have any chronic medical condition',
-            style: TextStyle(fontSize: 13, color: AppColors.textBody),
-          ),
-        ),
-        Switch.adaptive(
-          value: _hasCondition,
-          onChanged: (v) => setState(() => _hasCondition = v),
-          activeColor: AppColors.rose,
-        ),
-      ],
-    ),
-  );
 
   Widget _submitBtn() => SizedBox(
     width: double.infinity,

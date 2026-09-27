@@ -221,8 +221,8 @@ class _DonorTabState extends State<DonorTab> {
 
             SliverToBoxAdapter(
               child: _buildSectionHeader(
-                '🩸 Find a Donor',
-                'Browse all registered donors',
+                '🔍 Find a Contributor',
+                'Browse all registered contributors',
               ),
             ),
             SliverToBoxAdapter(child: _buildSearchBar()),
@@ -310,7 +310,7 @@ class _DonorTabState extends State<DonorTab> {
             _menuItem(
               'eligibility',
               Icons.checklist_rounded,
-              'Donation eligibility',
+              'Eligibility guide',
             ),
             _menuItem('support', Icons.headset_mic_outlined, 'Help & Support'),
             _menuItem('share', Icons.share_outlined, 'Share app'),
@@ -393,13 +393,13 @@ class _DonorTabState extends State<DonorTab> {
       case 'how':
         _showInfoDialog(
           'How it works',
-          '1. Register as a donor with your blood group & location.\n2. Toggle availability when you are ready to donate.\n3. Seekers find you on the map or donor list.\n4. They call or WhatsApp you directly.\n5. You save a life. 🩸',
+          '1. Register as a contributor with your group type & location.\n2. Toggle availability when you are ready to give.\n3. Seekers find you on the map or contributor list.\n4. They call or WhatsApp you directly.\n5. You make a difference! ❤️',
         );
         break;
       case 'eligibility':
         _showInfoDialog(
-          'Donation Eligibility',
-          '✓ Age: 18–65 years\n✓ Weight: ≥ 45 kg\n✓ Haemoglobin: ≥ 12.5 g/dL\n✓ Gap between donations: 3 months\n✗ Not eligible if: pregnant, on medication, recent surgery, or chronic illness.',
+          'Eligibility Guide',
+          '✓ Age: 18–65 years\n✓ Weight: ≥ 45 kg\n✓ Gap between contributions: 3 months\n✓ General good health\n✗ Check with a healthcare provider if you have any recent health concerns.',
         );
         break;
       case 'support':
@@ -459,8 +459,8 @@ class _DonorTabState extends State<DonorTab> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Inforedz is India\'s free real-time blood donation platform — connecting donors, patients in need, and blood banks across the country. Our mission is simple: no life should be lost due to lack of blood.\n\n'
-                'We built Inforedz to bridge the gap between those who can donate and those who urgently need blood. Whether it\'s a scheduled donation or an emergency SOS, Inforedz connects the right people at the right time.',
+                'Inforedz is India\'s free real-time community platform — connecting willing contributors, people in need, and verified centres across the country. Our mission is simple: connect the right people at the right time.\n\n'
+                'We built Inforedz to bridge the gap between those who want to give and those who need support. Whether it\'s a planned contribution or an urgent request, Inforedz makes the connection fast and free.',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textBody,
@@ -481,7 +481,7 @@ class _DonorTabState extends State<DonorTab> {
             Expanded(
               child: _aboutStat(
                 '120+',
-                'Blood Banks',
+                'Centres',
                 Icons.local_hospital_rounded,
               ),
             ),
@@ -509,15 +509,15 @@ class _DonorTabState extends State<DonorTab> {
               const SizedBox(height: 10),
               _missionPoint(
                 Icons.volunteer_activism_rounded,
-                'Make blood donation accessible to everyone in India',
+                'Make contributing accessible to everyone in India',
               ),
               _missionPoint(
                 Icons.map_rounded,
-                'Real-time map showing donors and blood banks near you',
+                'Real-time map showing contributors and centres near you',
               ),
               _missionPoint(
                 Icons.speed_rounded,
-                'Connect seekers to donors in under 60 seconds',
+                'Connect seekers to contributors in under 60 seconds',
               ),
               _missionPoint(
                 Icons.lock_outlined,
@@ -597,7 +597,7 @@ class _DonorTabState extends State<DonorTab> {
           child: Column(
             children: [
               const Text(
-                'Ready to save a life?',
+                'Ready to make a difference?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -606,7 +606,7 @@ class _DonorTabState extends State<DonorTab> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Register as a donor or blood bank today',
+                'Register as a contributor or centre today',
                 style: TextStyle(fontSize: 12, color: Colors.white70),
               ),
               const SizedBox(height: 16),
@@ -803,7 +803,7 @@ class _DonorTabState extends State<DonorTab> {
       'num': '1',
       'title': 'Nature of Service',
       'body':
-          'Inforedz is a digital platform that facilitates connection between blood donors, blood banks, and recipients. It does not collect, store, or supply blood and is not a medical service provider.',
+          'Inforedz is a digital platform that facilitates connection between contributors, centres, and people in need. It is a directory and communication tool, not a healthcare or medical service provider.',
     },
     {
       'num': '2',
@@ -813,27 +813,27 @@ class _DonorTabState extends State<DonorTab> {
     },
     {
       'num': '3',
-      'title': 'Blood Donors',
+      'title': 'Contributors',
       'body':
-          'Donors must be medically eligible, provide truthful health information, and participate voluntarily without any financial compensation. Donors consent to being contacted for donation requests.',
+          'Contributors must confirm their eligibility, provide truthful information, and participate voluntarily without any financial compensation. Contributors consent to being contacted for requests.',
     },
     {
       'num': '4',
-      'title': 'Blood Banks',
+      'title': 'Centres',
       'body':
-          'Blood banks must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution of blood, as well as maintaining accurate records.',
+          'Centres must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution, as well as maintaining accurate records.',
     },
     {
       'num': '5',
       'title': 'Recipients / Customers',
       'body':
-          'Users requesting blood must provide accurate details and use the platform strictly for legitimate medical needs. All procedures and transactions are subject to the policies of the respective blood banks or healthcare providers.',
+          'Users posting requests must provide accurate details and use the platform strictly for legitimate purposes. All procedures are subject to the policies of the respective centres or healthcare providers.',
     },
     {
       'num': '6',
       'title': 'Payments',
       'body':
-          'Any charges related to blood or services are determined and collected by blood banks or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
+          'Any charges related to services are determined and collected by centres or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
     },
     {
       'num': '7',
@@ -845,7 +845,7 @@ class _DonorTabState extends State<DonorTab> {
       'num': '8',
       'title': 'Disclaimer of Liability',
       'body':
-          'Inforedz does not guarantee availability of blood or donors and shall not be held liable for any medical outcomes, delays, or actions of third parties.',
+          'Inforedz does not guarantee availability of contributors or centres and shall not be held liable for any outcomes, delays, or actions of third parties.',
     },
     {
       'num': '9',
@@ -1310,12 +1310,12 @@ class _DonorTabState extends State<DonorTab> {
   // ── MARQUEE BANNER ─────────────────────────────────────────
   Widget _buildMarqueeBanner() {
     const text =
-        '🩸 Every drop counts — Register as a donor today   •   '
-        '🏥 Find blood banks near you on the map   •   '
-        '❤️ Over 12,000 lives saved through Inforedz   •   '
-        '🆘 Emergency? Post a request or call a donor now   •   '
+        '🔴 Register as a contributor today   •   '
+        '🏢 Find centres near you on the map   •   '
+        '❤️ Over 12,000 people helped through Inforedz   •   '
+        '🆘 Post a request or call a contributor now   •   '
         '✅ 100% Free — No fees, no ads, no barriers   •   '
-        '📍 Enable location to appear on the donor map   •   ';
+        '📍 Enable location to appear on the map   •   ';
 
     return Container(
       color: AppColors.roseDark,
@@ -1386,7 +1386,7 @@ class _DonorTabState extends State<DonorTab> {
                     ),
                     const SizedBox(height: 2),
                     const Text(
-                      'Ready to save a life today?',
+                      'Ready to make a difference today?',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -1414,7 +1414,7 @@ class _DonorTabState extends State<DonorTab> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      AuthState.role == 'donor' ? 'Donor' : 'Blood Bank',
+                      AuthState.role == 'donor' ? 'Contributor' : 'Centre',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -1568,7 +1568,7 @@ class _DonorTabState extends State<DonorTab> {
 
         style: const TextStyle(fontSize: 14, color: AppColors.textBody),
         decoration: InputDecoration(
-          hintText: 'Search name, city or blood type...',
+          hintText: 'Search name, city or group type...',
           prefixIcon: const Icon(
             Icons.search_rounded,
             color: AppColors.textMuted,
@@ -2350,7 +2350,7 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: AppColors.inkDark),
         title: const Text(
-          'Donors & Blood Banks',
+          'Contributors & Centres',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -2386,14 +2386,14 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
             right: 12,
             child: Row(
               children: [
-                _filterToggle('🩸 Donors', _showDonors, () {
+                _filterToggle('🔴 Contributors', _showDonors, () {
                   setState(() {
                     _showDonors = !_showDonors;
                     _buildMarkers();
                   });
                 }),
                 const SizedBox(width: 10),
-                _filterToggle('🏥 Blood Banks', _showBanks, () {
+                _filterToggle('🏢 Centres', _showBanks, () {
                   setState(() {
                     _showBanks = !_showBanks;
                     _buildMarkers();
@@ -2434,9 +2434,9 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _legendItem('🔴', 'Donors'),
+                  _legendItem('🔴', 'Contributors'),
                   const SizedBox(height: 4),
-                  _legendItem('🔵', 'Blood Banks'),
+                  _legendItem('🔵', 'Centres'),
                 ],
               ),
             ),

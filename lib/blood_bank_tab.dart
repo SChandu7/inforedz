@@ -119,7 +119,7 @@ class _BloodBankTabState extends State<BloodBankTab> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          'Blood Banks',
+          'Centres',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -183,7 +183,7 @@ class _BloodBankTabState extends State<BloodBankTab> {
         controller: _searchCtrl,
         style: const TextStyle(fontSize: 14, color: AppColors.textBody),
         decoration: InputDecoration(
-          hintText: 'Search blood banks by name or city...',
+          hintText: 'Search centres by name or city...',
           prefixIcon: const Icon(
             Icons.search_rounded,
             color: AppColors.textMuted,
@@ -252,7 +252,7 @@ class _BloodBankTabState extends State<BloodBankTab> {
         ),
         const SizedBox(height: 12),
         const Text(
-          'No blood banks found',
+          'No centres found',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -726,7 +726,7 @@ class BloodBankDetailScreen extends StatelessWidget {
               Icon(Icons.water_drop_rounded, size: 16, color: AppColors.rose),
               SizedBox(width: 8),
               Text(
-                'Blood Stock Availability',
+                'Unit Availability',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -772,7 +772,7 @@ class BloodBankDetailScreen extends StatelessWidget {
             ),
             icon: const Icon(Icons.call_rounded, size: 18),
             label: const Text(
-              'Call Bank',
+              'Call Centre',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ),

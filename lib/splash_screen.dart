@@ -333,7 +333,7 @@ class _SplashScreenState extends State<SplashScreen>
                   FadeTransition(
                     opacity: _textFade,
                     child: const Text(
-                      'Every drop counts. Every life matters.',
+                      'Connecting communities. Every moment matters.',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textMuted,

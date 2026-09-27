@@ -22,7 +22,7 @@ class _ProfileTabState extends State<ProfileTab> {
       'num': '1',
       'title': 'Nature of Service',
       'body':
-          'Inforedz is a digital platform that facilitates connection between blood donors, blood banks, and recipients. It does not collect, store, or supply blood and is not a medical service provider.',
+          'Inforedz is a digital platform that facilitates connection between contributors, verified centres, and those in need. It does not provide medical services or medical advice.',
     },
     {
       'num': '2',
@@ -32,27 +32,27 @@ class _ProfileTabState extends State<ProfileTab> {
     },
     {
       'num': '3',
-      'title': 'Blood Donors',
+      'title': 'Contributors',
       'body':
-          'Donors must be medically eligible, provide truthful health information, and participate voluntarily without any financial compensation. Donors consent to being contacted for donation requests.',
+          'Contributors must provide truthful information and participate voluntarily without any financial compensation. Contributors consent to being contacted when their help is needed.',
     },
     {
       'num': '4',
-      'title': 'Blood Banks',
+      'title': 'Centres',
       'body':
-          'Blood banks must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution of blood, as well as maintaining accurate records.',
+          'Centres must be duly authorized as per applicable local regulations and are solely responsible for their own operations, compliance, and maintaining accurate records.',
     },
     {
       'num': '5',
       'title': 'Recipients / Customers',
       'body':
-          'Users requesting blood must provide accurate details and use the platform strictly for legitimate medical needs. All procedures and transactions are subject to the policies of the respective blood banks or healthcare providers.',
+          'Users making requests must provide accurate details and use the platform strictly for legitimate purposes. All interactions are subject to the policies of the respective centres or service providers.',
     },
     {
       'num': '6',
       'title': 'Payments',
       'body':
-          'Any charges related to blood or services are determined and collected by blood banks or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
+          'Any charges related to services are determined and collected by the respective centres or service providers. Inforedz holds no responsibility for pricing or transactions.',
     },
     {
       'num': '7',
@@ -64,7 +64,7 @@ class _ProfileTabState extends State<ProfileTab> {
       'num': '8',
       'title': 'Disclaimer of Liability',
       'body':
-          'Inforedz does not guarantee availability of blood or donors and shall not be held liable for any medical outcomes, delays, or actions of third parties.',
+          'Inforedz does not guarantee availability of contributors or centres and shall not be held liable for any outcomes, delays, or actions of third parties.',
     },
     {
       'num': '9',
@@ -187,8 +187,8 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Inforedz is India\'s free real-time blood donation platform — connecting donors, patients in need, and blood banks across the country. Our mission is simple: no life should be lost due to lack of blood.\n\n'
-                'We built Inforedz to bridge the gap between those who can donate and those who urgently need blood. Whether it\'s a scheduled donation or an emergency SOS, Inforedz connects the right people at the right time.',
+                'Inforedz is India\'s free real-time community platform — connecting willing contributors, people in need, and verified centres across the country. Our mission is simple: connect the right people at the right time.\n\n'
+                'We built Inforedz to bridge the gap between those who want to give and those who need support. Whether it\'s a planned contribution or an urgent request, Inforedz makes the connection fast and free.',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textBody,
@@ -209,7 +209,7 @@ class _ProfileTabState extends State<ProfileTab> {
             Expanded(
               child: _aboutStat(
                 '120+',
-                'Blood Banks',
+                'Centres',
                 Icons.local_hospital_rounded,
               ),
             ),
@@ -237,11 +237,11 @@ class _ProfileTabState extends State<ProfileTab> {
               const SizedBox(height: 10),
               _missionPoint(
                 Icons.volunteer_activism_rounded,
-                'Make blood donation accessible to everyone in India',
+                'Make contributing accessible to everyone in India',
               ),
               _missionPoint(
                 Icons.map_rounded,
-                'Real-time map showing donors and blood banks near you',
+                'Real-time map showing contributors and centres near you',
               ),
               _missionPoint(
                 Icons.speed_rounded,
@@ -325,7 +325,7 @@ class _ProfileTabState extends State<ProfileTab> {
           child: Column(
             children: [
               const Text(
-                'Ready to save a life?',
+                'Ready to make a difference?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -334,7 +334,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Register as a donor or blood bank today',
+                'Register as a contributor or centre today',
                 style: TextStyle(fontSize: 12, color: Colors.white70),
               ),
               const SizedBox(height: 16),
@@ -1017,7 +1017,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    isDonor ? 'Blood Donor' : 'Blood Bank',
+                                    isDonor ? 'Contributor' : 'Centre',
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
@@ -1066,7 +1066,7 @@ class _ProfileTabState extends State<ProfileTab> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _statCard(blood, 'Blood Group', Icons.bloodtype_rounded),
+          child: _statCard(blood, 'Group Type', Icons.bloodtype_rounded),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -1141,7 +1141,7 @@ class _ProfileTabState extends State<ProfileTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Donation Availability',
+                  'Availability',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1150,8 +1150,8 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
                 Text(
                   isAvailable
-                      ? 'You are visible to donors and on the map'
-                      : 'You are hidden from the donor list and map',
+                      ? 'You are visible on the map and contributor list'
+                      : 'You are hidden from the map and list',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.textMuted,
@@ -1357,7 +1357,7 @@ class _ProfileTabState extends State<ProfileTab> {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'Update Blood Stock',
+                  'Update Unit Stock',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -1399,7 +1399,7 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Enter number of units available per blood group:',
+            'Enter units available per group type:',
             style: TextStyle(fontSize: 11, color: AppColors.textMuted),
           ),
           const SizedBox(height: 12),
@@ -1688,7 +1688,7 @@ class _EditDonorCardState extends State<_EditDonorCard> {
       'num': '1',
       'title': 'Nature of Service',
       'body':
-          'Inforedz is a digital platform that facilitates connection between blood donors, blood banks, and recipients. It does not collect, store, or supply blood and is not a medical service provider.',
+          'Inforedz is a digital platform that facilitates connection between contributors, verified centres, and those in need. It does not provide medical services or medical advice.',
     },
     {
       'num': '2',
@@ -1698,27 +1698,27 @@ class _EditDonorCardState extends State<_EditDonorCard> {
     },
     {
       'num': '3',
-      'title': 'Blood Donors',
+      'title': 'Contributors',
       'body':
-          'Donors must be medically eligible, provide truthful health information, and participate voluntarily without any financial compensation. Donors consent to being contacted for donation requests.',
+          'Contributors must provide truthful information and participate voluntarily without any financial compensation. Contributors consent to being contacted when their help is needed.',
     },
     {
       'num': '4',
-      'title': 'Blood Banks',
+      'title': 'Centres',
       'body':
-          'Blood banks must be duly authorized as per applicable local regulations and are solely responsible for safe collection, testing, storage, and distribution of blood, as well as maintaining accurate records.',
+          'Centres must be duly authorized as per applicable local regulations and are solely responsible for their own operations, compliance, and maintaining accurate records.',
     },
     {
       'num': '5',
       'title': 'Recipients / Customers',
       'body':
-          'Users requesting blood must provide accurate details and use the platform strictly for legitimate medical needs. All procedures and transactions are subject to the policies of the respective blood banks or healthcare providers.',
+          'Users making requests must provide accurate details and use the platform strictly for legitimate purposes. All interactions are subject to the policies of the respective centres or service providers.',
     },
     {
       'num': '6',
       'title': 'Payments',
       'body':
-          'Any charges related to blood or services are determined and collected by blood banks or healthcare providers. Inforedz holds no responsibility for pricing or transactions.',
+          'Any charges related to services are determined and collected by the respective centres or service providers. Inforedz holds no responsibility for pricing or transactions.',
     },
     {
       'num': '7',
@@ -1730,7 +1730,7 @@ class _EditDonorCardState extends State<_EditDonorCard> {
       'num': '8',
       'title': 'Disclaimer of Liability',
       'body':
-          'Inforedz does not guarantee availability of blood or donors and shall not be held liable for any medical outcomes, delays, or actions of third parties.',
+          'Inforedz does not guarantee availability of contributors or centres and shall not be held liable for any outcomes, delays, or actions of third parties.',
     },
     {
       'num': '9',
@@ -2077,8 +2077,6 @@ class _EditDonorCardState extends State<_EditDonorCard> {
                       _bloodGroupDrop(),
                       const SizedBox(height: 12),
                       _lastDonatedDrop(),
-                      const SizedBox(height: 12),
-                      _conditionRow(),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -2227,7 +2225,7 @@ class _EditDonorCardState extends State<_EditDonorCard> {
     return DropdownButtonFormField<String>(
       value: _bloodGroup,
       decoration: const InputDecoration(
-        labelText: 'Blood Group',
+        labelText: 'Group Type',
         prefixIcon: Icon(Icons.water_drop_outlined, size: 18),
       ),
       items: groups
