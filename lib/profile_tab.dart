@@ -87,6 +87,10 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _loadProfile() async {
+    if (AuthState.userId == null || AuthState.isGuest) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
     try {
       final res = await ApiService.get(
@@ -202,20 +206,14 @@ class _ProfileTabState extends State<ProfileTab> {
         // ── Stats ───────────────────────────────────────────
         Row(
           children: [
+            Expanded(child: _aboutStat('45+', 'Donors', Icons.people_rounded)),
+            const SizedBox(width: 10),
             Expanded(
-              child: _aboutStat('2800+', 'Donors', Icons.people_rounded),
+              child: _aboutStat('3+', 'Centres', Icons.local_hospital_rounded),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _aboutStat(
-                '120+',
-                'Centres',
-                Icons.local_hospital_rounded,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _aboutStat('12K+', 'Lives Saved', Icons.favorite_rounded),
+              child: _aboutStat('10+', 'Live Users', Icons.favorite_rounded),
             ),
           ],
         ),
@@ -303,9 +301,9 @@ class _ProfileTabState extends State<ProfileTab> {
             _teamCard(
               'assets/team4.jpeg',
 
-              '4th member Detials here ',
-              'Founder & Editor',
-              'MBBS ,MD(Gen Med)',
+              'S Chandra Sekhar',
+              'InfoRedz Developer',
+              'Software Engineer',
               const Color(0xFF1565C0),
             ),
           ],

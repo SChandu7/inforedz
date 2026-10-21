@@ -10,6 +10,7 @@ import 'splash_screen.dart';
 import 'donor_tab.dart';
 import 'blood_bank_tab.dart';
 import 'profile_tab.dart';
+import 'forgot_password_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
@@ -472,6 +473,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 _emailField(),
                 const SizedBox(height: 14),
                 _passwordField(),
+                if (_isLogin) _forgotPasswordLink(),
                 if (!_isLogin) ...[
                   const SizedBox(height: 14),
                   _nameField(),
@@ -1193,6 +1195,27 @@ class _AuthScreenState extends State<AuthScreen> {
     validator: (v) => (v == null || v.length < 6) ? 'Min 6 characters' : null,
   );
 
+  Widget _forgotPasswordLink() => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+        ),
+        child: const Text(
+          'Forgot password?',
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: AppColors.rose,
+          ),
+        ),
+      ),
+    ),
+  );
+
   Widget _nameField() => TextFormField(
     controller: _nameCtrl,
     decoration: InputDecoration(
@@ -1521,16 +1544,19 @@ class _AuthScreenState extends State<AuthScreen> {
           width: double.infinity,
           height: 48,
           child: OutlinedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               AuthState.userId = null;
               AuthState.email = null;
               AuthState.role = 'guest';
               AuthState.name = 'Guest';
               AuthState.isLoggedIn = false; // guest = not logged in
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
-              );
+              await AuthState.save();
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HomeScreen()),
+                );
+              }
             },
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: AppColors.divider),

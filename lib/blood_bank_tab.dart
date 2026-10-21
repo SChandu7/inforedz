@@ -138,6 +138,7 @@ class _BloodBankTabState extends State<BloodBankTab> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'bank_map_fab',
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => DonorMapScreen()),

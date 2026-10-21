@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:inforedz/splash_screen.dart';
 import 'main.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -139,10 +140,11 @@ class _DonorTabState extends State<DonorTab> {
   Future<void> _loadDonors() async {
     setState(() => _loading = true);
     try {
-      final res = await ApiService.get(
-        '/donors/',
-        params: {'available': 'all'},
-      );
+      final params = {'available': 'all'};
+      if (AuthState.userId != null) {
+        params['user_id'] = '${AuthState.userId}';
+      }
+      final res = await ApiService.get('/donors/', params: params);
       if (res['success'] == true && mounted) {
         final list = (res['data'] as List)
             .map((e) => DonorModel.fromJson(e))
@@ -161,10 +163,11 @@ class _DonorTabState extends State<DonorTab> {
 
   Future<void> _silentRefresh() async {
     try {
-      final res = await ApiService.get(
-        '/donors/',
-        params: {'available': 'all'},
-      );
+      final params = {'available': 'all'};
+      if (AuthState.userId != null) {
+        params['user_id'] = '${AuthState.userId}';
+      }
+      final res = await ApiService.get('/donors/', params: params);
       if (res['success'] == true && mounted) {
         final list = (res['data'] as List)
             .map((e) => DonorModel.fromJson(e))
@@ -1799,9 +1802,127 @@ class _DonorCard extends StatelessWidget {
   final DonorModel donor;
   const _DonorCard({required this.donor});
 
+  void _showEmailFallback(
+    BuildContext context,
+    String name,
+    String email,
+    String action,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.rosePale,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.email_outlined,
+                color: AppColors.rose,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.inkDark,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Detais Are Denied For Guest Users',
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              "Please Login To Contact",
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.rose,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SplashScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.rose,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.email_outlined, color: Colors.white),
+                label: const Text(
+                  'Login',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.divider),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _callDonor(BuildContext context, String phone) async {
     if (phone.isEmpty) {
-      _snack(context, 'No phone number available');
+      _showEmailFallback(context, donor.name, donor.email, 'Call');
       return;
     }
     showModalBottomSheet(
@@ -1913,7 +2034,7 @@ class _DonorCard extends StatelessWidget {
 
   void _openWhatsApp(BuildContext context, String phone) async {
     if (phone.isEmpty) {
-      _snack(context, 'No phone number available');
+      _showEmailFallback(context, donor.name, donor.email, 'WhatsApp');
       return;
     }
     showModalBottomSheet(
@@ -2035,6 +2156,7 @@ class _DonorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       borderColor: donor.available ? AppColors.rose.withOpacity(0.3) : null,
+      onTap: () => _showDonorDetails(context),
       child: Row(
         children: [
           _buildAvatar(),
@@ -2044,6 +2166,203 @@ class _DonorCard extends StatelessWidget {
       ),
     );
   }
+
+  void _showDonorDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.rosePale,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.rose.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      donor.initials,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.rose,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        donor.name,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.inkDark,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _availBadge(),
+                    ],
+                  ),
+                ),
+                BloodBadge(type: donor.bloodGroup, size: 16),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Divider(color: AppColors.divider),
+            const SizedBox(height: 16),
+            _detailRow(
+              Icons.location_on_rounded,
+              'City',
+              donor.city.isNotEmpty ? donor.city : '--',
+            ),
+            _detailRow(
+              Icons.cake_outlined,
+              'Age',
+              donor.age > 0 ? '${donor.age} yrs' : '--',
+            ),
+            _detailRow(
+              Icons.person_outline_rounded,
+              'Gender',
+              donor.gender.isNotEmpty ? donor.gender : '--',
+            ),
+            _detailRow(
+              Icons.monitor_weight_outlined,
+              'Weight',
+              donor.weight > 0 ? '${donor.weight} kg' : '--',
+            ),
+            _detailRow(
+              Icons.calendar_month_rounded,
+              'Last donated',
+              donor.lastDonated.isNotEmpty ? donor.lastDonated : '--',
+            ),
+            _detailRow(
+              Icons.water_drop_rounded,
+              'Total donations',
+              '${donor.donations}',
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _callDonor(context, donor.phone);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.rose,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.call_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      label: const Text(
+                        'Call',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openWhatsApp(context, donor.phone);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.chat_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      label: const Text(
+                        'WhatsApp',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.rose),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textBody,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildAvatar() {
     return Stack(
