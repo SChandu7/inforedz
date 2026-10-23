@@ -38,10 +38,10 @@ dependencies:
   shared_preferences: ^2.2.2
   http: ^1.2.0
   geolocator: ^11.0.0
-  permission_handler: ^11.3.0
   url_launcher: ^6.2.5
   flutter_typeahead: ^5.2.0
   flutter_launcher_icons: ^0.13.1
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:

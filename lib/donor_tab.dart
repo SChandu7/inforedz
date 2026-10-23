@@ -316,7 +316,8 @@ class _DonorTabState extends State<DonorTab> {
               'Eligibility guide',
             ),
             _menuItem('support', Icons.headset_mic_outlined, 'Help & Support'),
-            _menuItem('share', Icons.share_outlined, 'Share app'),
+            if (ApiConfig.storeUrl != null)
+              _menuItem('share', Icons.share_outlined, 'Share app'),
             _menuItem('privacy', Icons.privacy_tip_outlined, 'Privacy policy'),
           ],
         ),
@@ -409,12 +410,10 @@ class _DonorTabState extends State<DonorTab> {
         _showSupport();
         break;
       case 'share':
-        launchUrl(
-          Uri.parse(
-            'https://play.google.com/store/apps/details?id=com.inforedz.app',
-          ),
-          mode: LaunchMode.externalApplication,
-        );
+        final url = ApiConfig.storeUrl;
+        if (url != null) {
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        }
         break;
       case 'privacy':
         launchUrl(

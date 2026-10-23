@@ -24,3 +24,11 @@
 /coverage/
 
 
+
+# Signing material and secrets — never commit
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+key.properties

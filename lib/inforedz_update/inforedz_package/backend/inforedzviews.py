@@ -159,20 +159,39 @@ def get_user_by_id(user_id):
     except (User.DoesNotExist, ValueError, TypeError):
         return None, err('User not found.', 404)
 
+def token_required():
+    """
+    settings.INFOREDZ_REQUIRE_TOKEN = True rejects requests without X-Auth-Token.
+    Keep it False until every live app build (Android + iOS) sends the token,
+    otherwise older installs can no longer edit their profile.
+    """
+    from django.conf import settings
+    return getattr(settings, 'INFOREDZ_REQUIRE_TOKEN', False)
+
 def get_web_user(request, user_id):
     """
-    Website write-path auth.
+    Auth for any request that acts on a user's own data (app + website).
     If the request carries X-Auth-Token, it MUST match the user's token.
-    If it does not (e.g. the current Flutter app, which doesn't send one),
-    fall back to id-only lookup so the app keeps working until it's updated.
+    Without one, id-only lookup is allowed only while INFOREDZ_REQUIRE_TOKEN is off.
     """
     token = request.headers.get('X-Auth-Token', '')
     user, error = get_user_by_id(user_id)
     if error:
         return None, error
-    if token and user.auth_token and token != user.auth_token:
+    if not token:
+        if token_required():
+            return None, err('Please sign in again.', 401)
+        return user, None
+    if not user.auth_token or token != user.auth_token:
         return None, err('Invalid or expired session.', 401)
     return user, None
+
+def viewer_signed_in(request):
+    """True when the caller is a signed-in user — gates donor phone numbers."""
+    token = request.headers.get('X-Auth-Token', '')
+    if token:
+        return User.objects.filter(auth_token=token, is_active=True).exists()
+    return not token_required() and bool(request.GET.get('user_id'))
 
 def serialize_donor(user, include_contact=True):
     data = {
@@ -330,7 +349,9 @@ class LoginView(View):
             return err('Invalid email or password.')
 
         payload = serialize_donor(user) if user.role == 'donor' else serialize_bank(user)
-        payload['auth_token'] = user.issue_token()
+        # Reuse the existing token so signing in on the app doesn't sign the
+        # user out of the website (and vice versa). Password reset clears it.
+        payload['auth_token'] = user.auth_token or user.issue_token()
         return ok(data={'user': payload}, message='Login successful.')
 
 
@@ -341,7 +362,7 @@ class LoginView(View):
 class ProfileView(View):
 
     def get(self, request):
-        user, error = get_user_by_id(request.GET.get('user_id'))
+        user, error = get_web_user(request, request.GET.get('user_id'))
         if error: return error
         payload = serialize_donor(user) if user.role == 'donor' else serialize_bank(user)
         return ok(data=payload)
@@ -382,6 +403,25 @@ class ProfileView(View):
 
         except Exception as e:
             return err(f'Update failed: {str(e)}', 500)
+
+
+# ── DELETE ACCOUNT ────────────────────────────────────────────
+# POST /api/inforedz/delete-account/
+# Header: X-Auth-Token   Body: { user_id, password }
+# Permanently removes the user and everything linked to them (stock,
+# donations, requests, OTPs). Required by App Store guideline 5.1.1(v).
+@method_decorator(csrf_exempt, name='dispatch')
+class DeleteAccountView(View):
+    def post(self, request):
+        data = json_body(request)
+        if not request.headers.get('X-Auth-Token'):
+            return err('Please sign in again.', 401)
+        user, error = get_web_user(request, data.get('user_id'))
+        if error: return error
+        if not user.check_password(data.get('password', '')):
+            return err('Incorrect password.', 403)
+        user.delete()
+        return ok(message='Your account and data have been deleted.')
 
 
 # ── UPDATE LOCATION ───────────────────────────────────────────
@@ -429,7 +469,7 @@ class DonorListView(View):
             )
 
         # Phone is included only for signed-in web users (token present).
-        include_contact = bool(request.headers.get('X-Auth-Token')) or bool(request.GET.get('user_id'))
+        include_contact = viewer_signed_in(request)
         return ok(data=[serialize_donor(d, include_contact=include_contact) for d in qs.order_by('name')])
 
 
@@ -454,7 +494,7 @@ class DonorDetailView(View):
             user = User.objects.get(id=donor_id, role='donor', is_active=True)
         except User.DoesNotExist:
             return err('Donor not found.', 404)
-        include_contact = bool(request.headers.get('X-Auth-Token')) or bool(request.GET.get('user_id'))
+        include_contact = viewer_signed_in(request)
         return ok(data=serialize_donor(user, include_contact=include_contact))
 
 
@@ -614,7 +654,7 @@ class RequestListView(View):
 class DonationView(View):
 
     def get(self, request):
-        user, error = get_user_by_id(request.GET.get('user_id'))
+        user, error = get_web_user(request, request.GET.get('user_id'))
         if error: return error
         rows = DonationLog.objects.filter(donor=user)
         return ok(data=[{
@@ -652,4 +692,4 @@ class DonationView(View):
                 'notes':      log.notes,
             }, message='Donation logged.')
         except Exception as e:
-            return err(f'Could not log donation: {str(e)}', 500)
+            return err(f'Could not log donation: {str(e)}', 500)

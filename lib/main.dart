@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'splash_screen.dart';
 import 'donor_tab.dart';
 import 'blood_bank_tab.dart';
@@ -52,6 +54,18 @@ class AppColors {
 class ApiConfig {
   static const baseUrl = 'https://api.chandus7.in/api/inforedz';
   static const googleMapsKey = 'YOUR_GOOGLE_MAPS_API_KEY';
+
+  // Store links for "Share app". Fill appStoreId with the numeric Apple ID
+  // from App Store Connect (App Information → Apple ID) once the app exists.
+  static const playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.inforedz.app';
+  static const appStoreId = '';
+  static String? get storeUrl {
+    if (Platform.isIOS) {
+      return appStoreId.isEmpty ? null : 'https://apps.apple.com/app/id$appStoreId';
+    }
+    return playStoreUrl;
+  }
 }
 
 class AuthState {
@@ -61,8 +75,12 @@ class AuthState {
   static String? name;
   static String? bloodGroup;
   static String? bankName;
+  static String? token; // session token from /login/ — kept in Keychain / Keystore
   static bool isLoggedIn = false;
   static bool get isGuest => role == 'guest';
+
+  static const _secure = FlutterSecureStorage();
+  static const _tokenKey = 'authToken';
 
   static Future<void> loadFromPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -73,6 +91,15 @@ class AuthState {
     bloodGroup = p.getString('bloodGroup');
     bankName = p.getString('bankName');
     isLoggedIn = p.getBool('isLoggedIn') ?? false;
+    try {
+      token = await _secure.read(key: _tokenKey);
+    } catch (_) {
+      token = null;
+    }
+    // Sessions saved before tokens existed must sign in once more.
+    if (isLoggedIn && (token == null || token!.isEmpty)) {
+      await clear();
+    }
   }
 
   static Future<void> save() async {
@@ -84,11 +111,16 @@ class AuthState {
     if (bloodGroup != null) await p.setString('bloodGroup', bloodGroup!);
     if (bankName != null) await p.setString('bankName', bankName!);
     await p.setBool('isLoggedIn', isLoggedIn);
+    if (token != null) await _secure.write(key: _tokenKey, value: token);
   }
 
   static Future<void> clear() async {
     final p = await SharedPreferences.getInstance();
     await p.clear();
+    try {
+      await _secure.delete(key: _tokenKey);
+    } catch (_) {}
+    token = null;
     userId = null;
     email = null;
     role = null;
@@ -395,6 +427,7 @@ class _AuthScreenState extends State<AuthScreen> {
         AuthState.name = user['name'];
         AuthState.bloodGroup = user['blood_group'];
         AuthState.bankName = user['bank_name'];
+        AuthState.token = user['auth_token'];
         AuthState.isLoggedIn = true;
         await AuthState.save();
         if (mounted)
@@ -1589,6 +1622,8 @@ class ApiService {
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    if (AuthState.token != null && AuthState.token!.isNotEmpty)
+      'X-Auth-Token': AuthState.token!,
   };
 
   static Future<Map<String, dynamic>> post(

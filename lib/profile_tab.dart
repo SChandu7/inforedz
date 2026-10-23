@@ -154,6 +154,91 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Future<void> _deleteAccount() async {
+    final passCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppColors.inkDark,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently deletes your account, profile and history '
+              'from Inforedz on the app and the website. This cannot be undone.',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Enter your password to confirm',
+                prefixIcon: Icon(Icons.lock_outline_rounded, size: 18),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    final password = passCtrl.text;
+    passCtrl.dispose();
+    if (confirm != true || !mounted) return;
+    if (password.isEmpty) {
+      _snack('Please enter your password to delete your account');
+      return;
+    }
+
+    final res = await ApiService.post('/delete-account/', {
+      'user_id': AuthState.userId,
+      'password': password,
+    });
+    if (!mounted) return;
+    if (res['success'] == true) {
+      await AuthState.clear();
+      if (!mounted) return;
+      _snack('Your account has been deleted');
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (_) => false,
+      );
+    } else {
+      _snack(res['message'] ?? 'Could not delete account. Please try again.');
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
+  }
+
   Widget _buildGuestAboutPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -937,6 +1022,33 @@ class _ProfileTabState extends State<ProfileTab> {
           onPressed: _logout,
           tooltip: 'Sign Out',
         ),
+        if (!AuthState.isGuest)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            color: AppColors.white,
+            onSelected: (v) {
+              if (v == 'delete') _deleteAccount();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_forever_rounded,
+                      color: AppColors.danger,
+                      size: 20,
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Delete account',
+                      style: TextStyle(color: AppColors.danger),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(

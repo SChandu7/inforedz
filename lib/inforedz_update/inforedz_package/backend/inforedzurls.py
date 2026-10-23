@@ -10,6 +10,7 @@ urlpatterns = [
     path('login/',      views.LoginView.as_view(),          name='auth-login'),
     path('profile/',    views.ProfileView.as_view(),        name='auth-profile'),
     path('location/',   views.UpdateLocationView.as_view(), name='auth-location'),
+    path('delete-account/', views.DeleteAccountView.as_view(), name='auth-delete-account'),
 
     path('donors/',                views.DonorListView.as_view(),   name='donor-list'),
     path('donors/map/',            views.DonorMapView.as_view(),    name='donor-map'),
