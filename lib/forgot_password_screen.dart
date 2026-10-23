@@ -91,8 +91,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _resetPassword() async {
     final pass = _passCtrl.text;
     final confirm = _confirmCtrl.text;
-    if (pass.length < 6) {
-      _showError('Password must be at least 6 characters');
+    if (pass.length < 8) {
+      _showError('Password must be at least 8 characters');
       return;
     }
     if (pass != confirm) {

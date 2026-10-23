@@ -7,7 +7,8 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:async';
+import 'dart:io' show Platform, SocketException;
 import 'splash_screen.dart';
 import 'donor_tab.dart';
 import 'blood_bank_tab.dart';
@@ -413,9 +414,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final body = _isLogin
           ? {'email': _emailCtrl.text.trim(), 'password': _passCtrl.text}
           : _buildRegisterBody();
-      debugPrint('POST $endpoint => $body');
       final result = await ApiService.post(endpoint, body);
-      debugPrint('RESULT => $result');
       if (!mounted) return;
       if (result['success'] == true) {
         final user =
@@ -439,8 +438,8 @@ class _AuthScreenState extends State<AuthScreen> {
         _showError(result['message'] ?? 'Something went wrong');
       }
     } catch (e) {
-      debugPrint('ERROR: $e');
-      _showError('Error: $e');
+      debugPrint('Auth error: $e');
+      _showError('Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -951,31 +950,46 @@ class _AuthScreenState extends State<AuthScreen> {
   List<Map<String, dynamic>> _citySuggestions = [];
   bool _citySearching = false;
 
+  // Search-as-you-type uses Photon (photon.komoot.io), which is built for
+  // autocomplete. Nominatim's usage policy forbids autocomplete, so it is only
+  // used for the one-off reverse lookup in LocationService.
   Future<List<Map<String, dynamic>>> _searchCities(String query) async {
     if (query.length < 3) return [];
     try {
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=in',
-      );
+      final uri = Uri.https('photon.komoot.io', '/api/', {
+        'q': query,
+        'limit': '8',
+        'lang': 'en',
+        'bbox': '68.1,6.5,97.5,35.7', // India
+      });
       final res = await http
           .get(uri, headers: {'User-Agent': 'InforedzApp/1.0'})
           .timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) {
-        final list = jsonDecode(res.body) as List;
-        return list
-            .map(
-              (e) => {
-                'display': e['display_name'] ?? '',
-                'short':
-                    (e['address']?['city'] ??
-                    e['address']?['town'] ??
-                    e['address']?['village'] ??
-                    e['address']?['county'] ??
-                    query),
-                'lat': double.tryParse(e['lat'] ?? '') ?? 0.0,
-                'lng': double.tryParse(e['lon'] ?? '') ?? 0.0,
-              },
-            )
+        final features = (jsonDecode(res.body)['features'] as List?) ?? [];
+        return features
+            .where((f) => f['properties']?['countrycode'] == 'IN')
+            .take(5)
+            .map((f) {
+              final p = f['properties'] as Map<String, dynamic>;
+              final coords = (f['geometry']?['coordinates'] as List?) ?? [];
+              final name = (p['name'] ?? '') as String;
+              final city = (p['city'] ?? p['county'] ?? '') as String;
+              final parts = <String>[
+                name,
+                if (city.isNotEmpty && city != name) city,
+                if ((p['state'] ?? '') != '') p['state'] as String,
+                'India',
+              ].where((e) => e.isNotEmpty).toList();
+              return <String, dynamic>{
+                'display': parts.join(', '),
+                'short': const ['place', 'boundary'].contains(p['osm_key']) || city.isEmpty
+                    ? name
+                    : city,
+                'lat': coords.length > 1 ? (coords[1] as num).toDouble() : 0.0,
+                'lng': coords.isNotEmpty ? (coords[0] as num).toDouble() : 0.0,
+              };
+            })
             .toList();
       }
     } catch (_) {}
@@ -1060,6 +1074,7 @@ class _AuthScreenState extends State<AuthScreen> {
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'City is required' : null,
           ),
+          debounceDuration: const Duration(milliseconds: 500),
           suggestionsCallback: (query) async {
             setState(() => _citySearching = true);
             final results = await _searchCities(query);
@@ -1225,7 +1240,11 @@ class _AuthScreenState extends State<AuthScreen> {
         onPressed: () => setState(() => _obscure = !_obscure),
       ),
     ),
-    validator: (v) => (v == null || v.length < 6) ? 'Min 6 characters' : null,
+    // Sign-in still accepts older 6-character passwords; new ones need 8.
+    validator: (v) {
+      final min = _isLogin ? 6 : 8;
+      return (v == null || v.length < min) ? 'Min $min characters' : null;
+    },
   );
 
   Widget _forgotPasswordLink() => Padding(
@@ -1637,7 +1656,7 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
   }
 
@@ -1653,7 +1672,7 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
   }
 
@@ -1668,8 +1687,19 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
+  }
+
+  static String _networkError(Object e) {
+    debugPrint('API error: $e');
+    if (e is TimeoutException) {
+      return 'The server is taking too long to respond. Please try again.';
+    }
+    if (e is SocketException || e is http.ClientException) {
+      return 'No internet connection. Check your network and try again.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   static Map<String, dynamic> _parse(http.Response res) {
