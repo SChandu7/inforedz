@@ -33,6 +33,8 @@ workflows:
         bundle_identifier: com.inforedz.app
       vars:
         BUNDLE_ID: com.inforedz.app
+        # InfoREDZ in App Store Connect (General -> App Information -> Apple ID).
+        APP_STORE_APPLE_ID: 6761141438
 
     scripts:
       - name: Apply the code signing profile to the Xcode project
@@ -51,20 +53,24 @@ workflows:
 
       - name: Build the IPA
         script: |
-          # iOS build numbers only have to go up; start one above whatever
-          # TestFlight already has (0 when this is the first upload). The
-          # version name comes from pubspec.yaml.
-          APP_ID=$(app-store-connect apps list \
-            --bundle-id-identifier "$BUNDLE_ID" --strict-match-identifier --json 2>/dev/null \
-            | python3 -c 'import json, sys; apps = json.load(sys.stdin); print(apps[0]["id"] if apps else "")' \
-            || true)
-          LATEST=0
-          if [ -n "$APP_ID" ]; then
-            LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_ID" 2>/dev/null || echo 0)
+          # iOS build numbers only have to go up. Use one above the highest
+          # number App Store Connect has seen (TestFlight or App Store). If the
+          # lookup fails, use a UTC timestamp (yyMMddHHmm), which is always
+          # higher, rather than risk re-using a number and failing the upload.
+          # The version name comes from pubspec.yaml.
+          TF=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          AS=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          case "$TF" in ''|*[!0-9]*) TF=0 ;; esac
+          case "$AS" in ''|*[!0-9]*) AS=0 ;; esac
+          LATEST=$(( TF > AS ? TF : AS ))
+          if [ "$LATEST" -gt 0 ]; then
+            BUILD=$(( LATEST + 1 ))
+          else
+            BUILD=$(date -u +%y%m%d%H%M)
           fi
-          echo "App Store Connect app id: ${APP_ID:-not found}, latest TestFlight build: $LATEST"
+          echo "Latest TestFlight build: $TF, latest App Store build: $AS -> building $BUILD"
           flutter build ipa --release \
-            --build-number=$((LATEST + 1)) \
+            --build-number=$BUILD \
             --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
