@@ -236,7 +236,6 @@ def serialize_donor(user, include_contact=True):
     data = {
         'id':            user.id,
         'name':          user.name,
-        'email':         user.email,
         'role':          user.role,
         'blood_group':   user.blood_group,
         'city':          user.city,
@@ -251,8 +250,10 @@ def serialize_donor(user, include_contact=True):
         'longitude':     user.longitude,
         'created_at':    str(user.created_at.date()) if user.created_at else None,
     }
+    # Contact details only for signed-in viewers (and the user's own profile)
     if include_contact:
         data['phone'] = user.phone
+        data['email'] = user.email
     return data
 
 def serialize_bank(user):

@@ -289,18 +289,36 @@ class _ProfileTabState extends State<ProfileTab> {
         ),
 
         // ── Stats ───────────────────────────────────────────
-        Row(
-          children: [
-            Expanded(child: _aboutStat('45+', 'Donors', Icons.people_rounded)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _aboutStat('3+', 'Centres', Icons.local_hospital_rounded),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _aboutStat('10+', 'Live Users', Icons.favorite_rounded),
-            ),
-          ],
+        // Live counts from the server, never hard-coded claims
+        FutureBuilder<Map<String, dynamic>>(
+          future: AppStats.load(),
+          builder: (_, snap) => Row(
+            children: [
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'total_donors'),
+                  'Donors',
+                  Icons.people_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'total_banks'),
+                  'Centres',
+                  Icons.local_hospital_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'cities'),
+                  'Cities',
+                  Icons.location_city_rounded,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -493,7 +511,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   _footerLink(
                     'Privacy Policy',
                     () => launchUrl(
-                      Uri.parse('https://schandu7.github.io/infumedz/'),
+                      Uri.parse(ApiConfig.privacyPolicyUrl),
                       mode: LaunchMode.externalApplication,
                     ),
                   ),
@@ -2317,7 +2335,7 @@ class _EditDonorCardState extends State<_EditDonorCard> {
     switch (label) {
       case 'Privacy Policy':
         launchUrl(
-          Uri.parse('https://schandu7.github.io/infumedz/'),
+          Uri.parse(ApiConfig.privacyPolicyUrl),
           mode: LaunchMode.externalApplication,
         );
         break;

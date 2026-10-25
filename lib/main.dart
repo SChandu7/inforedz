@@ -84,6 +84,135 @@ class ApiConfig {
     }
     return playStoreUrl;
   }
+
+  // Public pages (GitHub Pages, docs/ folder of this repo)
+  static const privacyPolicyUrl = 'https://schandu7.github.io/inforedz/privacy.html';
+  static const supportUrl = 'https://schandu7.github.io/inforedz/support.html';
+}
+
+// ── LIVE STATS ────────────────────────────────────────────────
+// Real counts from /stats/, shared by every screen that shows numbers.
+class AppStats {
+  static Future<Map<String, dynamic>>? _future;
+
+  static Future<Map<String, dynamic>> load() => _future ??= _fetch();
+
+  static Future<Map<String, dynamic>> _fetch() async {
+    final res = await ApiService.get('/stats/');
+    final data = res['data'];
+    if (res['success'] == true && data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    _future = null; // try again the next time a screen asks
+    return {};
+  }
+
+  static String value(Map<String, dynamic>? stats, String key) {
+    final v = stats?[key];
+    return v is num ? '$v' : '—';
+  }
+}
+
+// ── REPORT / HIDE PROFILES ────────────────────────────────────
+// App Store guideline 1.2: users can report a donor or centre profile to the
+// team, and hide it from their own lists.
+class Moderation {
+  static const supportEmail = 'infusionmedzone@gmail.com';
+  static const _prefsKey = 'hiddenProfiles';
+  static Set<String> _hidden = {};
+
+  static Future<void> load() async {
+    final p = await SharedPreferences.getInstance();
+    _hidden = (p.getStringList(_prefsKey) ?? []).toSet();
+  }
+
+  static Future<void> persist() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_prefsKey, _hidden.toList());
+  }
+
+  static bool isHidden(String kind, Object? id) => _hidden.contains('$kind:$id');
+
+  static Future<void> hide(String kind, int id) async {
+    _hidden.add('$kind:$id');
+    await persist();
+  }
+
+  static Future<void> report(
+    BuildContext context, {
+    required String kind,
+    required int id,
+    required String name,
+  }) async {
+    const reasons = [
+      'Fake or impersonated profile',
+      'Wrong or outdated information',
+      'Abusive, spam or scam',
+      'Other',
+    ];
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text(
+                'Why are you reporting this profile?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.inkDark,
+                ),
+              ),
+            ),
+            for (final r in reasons)
+              ListTile(
+                leading: const Icon(
+                  Icons.flag_outlined,
+                  color: AppColors.danger,
+                ),
+                title: Text(r),
+                onTap: () => Navigator.pop(sheet, r),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (reason == null) return;
+
+    final subject = 'Report: $kind #$id';
+    final body =
+        'Profile: $name ($kind #$id)\n'
+        'Reason: $reason\n'
+        'Reported by user: ${AuthState.userId ?? 'guest'}\n\n'
+        'Details (optional): ';
+    final uri = Uri.parse(
+      'mailto:$supportEmail?subject=${Uri.encodeComponent(subject)}'
+      '&body=${Uri.encodeComponent(body)}',
+    );
+    var sent = false;
+    try {
+      sent = await launchUrl(uri);
+    } catch (_) {}
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Thanks. Send the email and our team will review this profile.'
+              : 'Please email $supportEmail with this report.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
 
 class AuthState {
@@ -109,6 +238,7 @@ class AuthState {
     bloodGroup = p.getString('bloodGroup');
     bankName = p.getString('bankName');
     isLoggedIn = p.getBool('isLoggedIn') ?? false;
+    await Moderation.load();
     try {
       token = await _secure.read(key: _tokenKey);
     } catch (_) {
@@ -135,6 +265,7 @@ class AuthState {
   static Future<void> clear() async {
     final p = await SharedPreferences.getInstance();
     await p.clear();
+    await Moderation.persist(); // hidden profiles survive sign-out
     try {
       await _secure.delete(key: _tokenKey);
     } catch (_) {}
@@ -613,7 +744,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     alignment: PlaceholderAlignment.middle,
                     child: GestureDetector(
                       onTap: () => launchUrl(
-                        Uri.parse('https://schandu7.github.io/infumedz/'),
+                        Uri.parse(ApiConfig.privacyPolicyUrl),
                         mode: LaunchMode.externalApplication,
                       ),
                       child: const Text(
