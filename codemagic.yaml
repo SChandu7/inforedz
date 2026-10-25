@@ -33,8 +33,6 @@ workflows:
         bundle_identifier: com.inforedz.app
       vars:
         BUNDLE_ID: com.inforedz.app
-        # InfoREDZ in App Store Connect (General -> App Information -> Apple ID).
-        APP_STORE_APPLE_ID: 6761141438
 
     scripts:
       - name: Apply the code signing profile to the Xcode project
@@ -53,22 +51,13 @@ workflows:
 
       - name: Build the IPA
         script: |
-          # iOS build numbers only have to go up. Use one above the highest
-          # number App Store Connect has seen (TestFlight or App Store). If the
-          # lookup fails, use a UTC timestamp (yyMMddHHmm), which is always
-          # higher, rather than risk re-using a number and failing the upload.
-          # The version name comes from pubspec.yaml.
-          TF=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
-          AS=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
-          case "$TF" in ''|*[!0-9]*) TF=0 ;; esac
-          case "$AS" in ''|*[!0-9]*) AS=0 ;; esac
-          LATEST=$(( TF > AS ? TF : AS ))
-          if [ "$LATEST" -gt 0 ]; then
-            BUILD=$(( LATEST + 1 ))
-          else
-            BUILD=$(date -u +%y%m%d%H%M)
-          fi
-          echo "Latest TestFlight build: $TF, latest App Store build: $AS -> building $BUILD"
+          # iOS build numbers only have to go up. A UTC timestamp (yyMMddHHmm,
+          # e.g. 2610251530) is higher than every earlier upload and different
+          # on every run, including Rebuilds, so the upload can never clash.
+          # Looking up TestFlight's latest number proved unreliable here.
+          # The version name (1.0.0) comes from pubspec.yaml.
+          BUILD=$(date -u +%y%m%d%H%M)
+          echo "Commit $CM_COMMIT -> iOS build number $BUILD"
           flutter build ipa --release \
             --build-number=$BUILD \
             --export-options-plist=/Users/builder/export_options.plist
