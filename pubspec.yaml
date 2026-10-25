@@ -42,6 +42,8 @@ dependencies:
   flutter_typeahead: ^5.2.0
   flutter_launcher_icons: ^0.13.1
   flutter_secure_storage: ^11.2.0
+  firebase_core: ^5.1.0
+  firebase_crashlytics: ^6.0.1
 
 dev_dependencies:
   flutter_test:
