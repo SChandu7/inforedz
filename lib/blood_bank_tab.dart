@@ -102,9 +102,10 @@ class _BloodBankTabState extends State<BloodBankTab> {
       _filtered = _banks
           .where(
             (b) =>
-                q.isEmpty ||
-                b.name.toLowerCase().contains(q) ||
-                b.city.toLowerCase().contains(q),
+                !Moderation.isHidden('bank', b.id) &&
+                (q.isEmpty ||
+                    b.name.toLowerCase().contains(q) ||
+                    b.city.toLowerCase().contains(q)),
           )
           .toList();
     });
@@ -167,8 +168,10 @@ class _BloodBankTabState extends State<BloodBankTab> {
                         : ListView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                             itemCount: _filtered.length,
-                            itemBuilder: (_, i) =>
-                                _BankCard(bank: _filtered[i]),
+                            itemBuilder: (_, i) => _BankCard(
+                              bank: _filtered[i],
+                              onHidden: _filter,
+                            ),
                           ),
                   ),
           ),
@@ -270,17 +273,21 @@ class _BloodBankTabState extends State<BloodBankTab> {
 // ─────────────────────────────────────────────────────────────
 class _BankCard extends StatelessWidget {
   final BloodBankModel bank;
-  const _BankCard({required this.bank});
+  final VoidCallback? onHidden; // refreshes the list after "Hide"
+  const _BankCard({required this.bank, this.onHidden});
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       borderColor: bank.isOpen ? AppColors.rose.withOpacity(0.25) : null,
       padding: EdgeInsets.zero,
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => BloodBankDetailScreen(bank: bank)),
-      ),
+      onTap: () async {
+        final hidden = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => BloodBankDetailScreen(bank: bank)),
+        );
+        if (hidden == true) onHidden?.call();
+      },
       child: Column(
         children: [
           _buildHeader(),
@@ -587,6 +594,52 @@ class BloodBankDetailScreen extends StatelessWidget {
         icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
+      actions: [
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+          color: AppColors.white,
+          onSelected: (v) async {
+            if (v == 'report') {
+              Moderation.report(
+                context,
+                kind: 'bank',
+                id: bank.id,
+                name: bank.name,
+              );
+            } else if (v == 'hide') {
+              await Moderation.hide('bank', bank.id);
+              // true tells the list to drop this centre
+              if (context.mounted) Navigator.pop(context, true);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'report',
+              child: Row(
+                children: [
+                  Icon(Icons.flag_outlined, size: 20, color: AppColors.danger),
+                  SizedBox(width: 10),
+                  Text('Report this centre'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'hide',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.visibility_off_outlined,
+                    size: 20,
+                    color: AppColors.textMuted,
+                  ),
+                  SizedBox(width: 10),
+                  Text('Hide this centre'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: const BoxDecoration(

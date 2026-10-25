@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "883557673550",
+    "project_id": "inforedzapp",
+    "storage_bucket": "inforedzapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883557673550:android:9a37a761e5d0ab4914b11f",
+        "android_client_info": {
+          "package_name": "com.inforedz.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlOKac6eQfLISeMDSnhLOpDa0PRG48Jkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

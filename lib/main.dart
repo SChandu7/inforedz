@@ -1,11 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io' show Platform, SocketException;
 import 'splash_screen.dart';
 import 'donor_tab.dart';
 import 'blood_bank_tab.dart';
@@ -15,6 +22,19 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Crash reporting: send every uncaught Flutter and Dart error to Crashlytics.
+  // Debug builds don't report, so local testing doesn't fill the dashboard.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+    !kDebugMode,
+  );
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -52,6 +72,147 @@ class AppColors {
 class ApiConfig {
   static const baseUrl = 'https://api.chandus7.in/api/inforedz';
   static const googleMapsKey = 'YOUR_GOOGLE_MAPS_API_KEY';
+
+  // Store links for "Share app". Fill appStoreId with the numeric Apple ID
+  // from App Store Connect (App Information → Apple ID) once the app exists.
+  static const playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.inforedz.app';
+  static const appStoreId = '6761141438';
+  static String? get storeUrl {
+    if (Platform.isIOS) {
+      return appStoreId.isEmpty ? null : 'https://apps.apple.com/app/id$appStoreId';
+    }
+    return playStoreUrl;
+  }
+
+  // Public pages on the InfoREDZ website (source: docs/ in this repo)
+  static const privacyPolicyUrl = 'https://inforedz.com/privacy';
+  static const supportUrl = 'https://inforedz.com/support';
+}
+
+// ── LIVE STATS ────────────────────────────────────────────────
+// Real counts from /stats/, shared by every screen that shows numbers.
+class AppStats {
+  static Future<Map<String, dynamic>>? _future;
+
+  static Future<Map<String, dynamic>> load() => _future ??= _fetch();
+
+  static Future<Map<String, dynamic>> _fetch() async {
+    final res = await ApiService.get('/stats/');
+    final data = res['data'];
+    if (res['success'] == true && data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    _future = null; // try again the next time a screen asks
+    return {};
+  }
+
+  static String value(Map<String, dynamic>? stats, String key) {
+    final v = stats?[key];
+    return v is num ? '$v' : '—';
+  }
+}
+
+// ── REPORT / HIDE PROFILES ────────────────────────────────────
+// App Store guideline 1.2: users can report a donor or centre profile to the
+// team, and hide it from their own lists.
+class Moderation {
+  static const supportEmail = 'infusionmedzone@gmail.com';
+  static const _prefsKey = 'hiddenProfiles';
+  static Set<String> _hidden = {};
+
+  static Future<void> load() async {
+    final p = await SharedPreferences.getInstance();
+    _hidden = (p.getStringList(_prefsKey) ?? []).toSet();
+  }
+
+  static Future<void> persist() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_prefsKey, _hidden.toList());
+  }
+
+  static bool isHidden(String kind, Object? id) => _hidden.contains('$kind:$id');
+
+  static Future<void> hide(String kind, int id) async {
+    _hidden.add('$kind:$id');
+    await persist();
+  }
+
+  static Future<void> report(
+    BuildContext context, {
+    required String kind,
+    required int id,
+    required String name,
+  }) async {
+    const reasons = [
+      'Fake or impersonated profile',
+      'Wrong or outdated information',
+      'Abusive, spam or scam',
+      'Other',
+    ];
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text(
+                'Why are you reporting this profile?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.inkDark,
+                ),
+              ),
+            ),
+            for (final r in reasons)
+              ListTile(
+                leading: const Icon(
+                  Icons.flag_outlined,
+                  color: AppColors.danger,
+                ),
+                title: Text(r),
+                onTap: () => Navigator.pop(sheet, r),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (reason == null) return;
+
+    final subject = 'Report: $kind #$id';
+    final body =
+        'Profile: $name ($kind #$id)\n'
+        'Reason: $reason\n'
+        'Reported by user: ${AuthState.userId ?? 'guest'}\n\n'
+        'Details (optional): ';
+    final uri = Uri.parse(
+      'mailto:$supportEmail?subject=${Uri.encodeComponent(subject)}'
+      '&body=${Uri.encodeComponent(body)}',
+    );
+    var sent = false;
+    try {
+      sent = await launchUrl(uri);
+    } catch (_) {}
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Thanks. Send the email and our team will review this profile.'
+              : 'Please email $supportEmail with this report.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
 
 class AuthState {
@@ -61,8 +222,12 @@ class AuthState {
   static String? name;
   static String? bloodGroup;
   static String? bankName;
+  static String? token; // session token from /login/ — kept in Keychain / Keystore
   static bool isLoggedIn = false;
   static bool get isGuest => role == 'guest';
+
+  static const _secure = FlutterSecureStorage();
+  static const _tokenKey = 'authToken';
 
   static Future<void> loadFromPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -73,6 +238,16 @@ class AuthState {
     bloodGroup = p.getString('bloodGroup');
     bankName = p.getString('bankName');
     isLoggedIn = p.getBool('isLoggedIn') ?? false;
+    await Moderation.load();
+    try {
+      token = await _secure.read(key: _tokenKey);
+    } catch (_) {
+      token = null;
+    }
+    // Sessions saved before tokens existed must sign in once more.
+    if (isLoggedIn && (token == null || token!.isEmpty)) {
+      await clear();
+    }
   }
 
   static Future<void> save() async {
@@ -84,11 +259,17 @@ class AuthState {
     if (bloodGroup != null) await p.setString('bloodGroup', bloodGroup!);
     if (bankName != null) await p.setString('bankName', bankName!);
     await p.setBool('isLoggedIn', isLoggedIn);
+    if (token != null) await _secure.write(key: _tokenKey, value: token);
   }
 
   static Future<void> clear() async {
     final p = await SharedPreferences.getInstance();
     await p.clear();
+    await Moderation.persist(); // hidden profiles survive sign-out
+    try {
+      await _secure.delete(key: _tokenKey);
+    } catch (_) {}
+    token = null;
     userId = null;
     email = null;
     role = null;
@@ -381,9 +562,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final body = _isLogin
           ? {'email': _emailCtrl.text.trim(), 'password': _passCtrl.text}
           : _buildRegisterBody();
-      debugPrint('POST $endpoint => $body');
       final result = await ApiService.post(endpoint, body);
-      debugPrint('RESULT => $result');
       if (!mounted) return;
       if (result['success'] == true) {
         final user =
@@ -395,6 +574,7 @@ class _AuthScreenState extends State<AuthScreen> {
         AuthState.name = user['name'];
         AuthState.bloodGroup = user['blood_group'];
         AuthState.bankName = user['bank_name'];
+        AuthState.token = user['auth_token'];
         AuthState.isLoggedIn = true;
         await AuthState.save();
         if (mounted)
@@ -406,8 +586,8 @@ class _AuthScreenState extends State<AuthScreen> {
         _showError(result['message'] ?? 'Something went wrong');
       }
     } catch (e) {
-      debugPrint('ERROR: $e');
-      _showError('Error: $e');
+      debugPrint('Auth error: $e');
+      _showError('Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -564,7 +744,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     alignment: PlaceholderAlignment.middle,
                     child: GestureDetector(
                       onTap: () => launchUrl(
-                        Uri.parse('https://schandu7.github.io/infumedz/'),
+                        Uri.parse(ApiConfig.privacyPolicyUrl),
                         mode: LaunchMode.externalApplication,
                       ),
                       child: const Text(
@@ -918,31 +1098,46 @@ class _AuthScreenState extends State<AuthScreen> {
   List<Map<String, dynamic>> _citySuggestions = [];
   bool _citySearching = false;
 
+  // Search-as-you-type uses Photon (photon.komoot.io), which is built for
+  // autocomplete. Nominatim's usage policy forbids autocomplete, so it is only
+  // used for the one-off reverse lookup in LocationService.
   Future<List<Map<String, dynamic>>> _searchCities(String query) async {
     if (query.length < 3) return [];
     try {
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=in',
-      );
+      final uri = Uri.https('photon.komoot.io', '/api/', {
+        'q': query,
+        'limit': '8',
+        'lang': 'en',
+        'bbox': '68.1,6.5,97.5,35.7', // India
+      });
       final res = await http
           .get(uri, headers: {'User-Agent': 'InforedzApp/1.0'})
           .timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) {
-        final list = jsonDecode(res.body) as List;
-        return list
-            .map(
-              (e) => {
-                'display': e['display_name'] ?? '',
-                'short':
-                    (e['address']?['city'] ??
-                    e['address']?['town'] ??
-                    e['address']?['village'] ??
-                    e['address']?['county'] ??
-                    query),
-                'lat': double.tryParse(e['lat'] ?? '') ?? 0.0,
-                'lng': double.tryParse(e['lon'] ?? '') ?? 0.0,
-              },
-            )
+        final features = (jsonDecode(res.body)['features'] as List?) ?? [];
+        return features
+            .where((f) => f['properties']?['countrycode'] == 'IN')
+            .take(5)
+            .map((f) {
+              final p = f['properties'] as Map<String, dynamic>;
+              final coords = (f['geometry']?['coordinates'] as List?) ?? [];
+              final name = (p['name'] ?? '') as String;
+              final city = (p['city'] ?? p['county'] ?? '') as String;
+              final parts = <String>[
+                name,
+                if (city.isNotEmpty && city != name) city,
+                if ((p['state'] ?? '') != '') p['state'] as String,
+                'India',
+              ].where((e) => e.isNotEmpty).toList();
+              return <String, dynamic>{
+                'display': parts.join(', '),
+                'short': const ['place', 'boundary'].contains(p['osm_key']) || city.isEmpty
+                    ? name
+                    : city,
+                'lat': coords.length > 1 ? (coords[1] as num).toDouble() : 0.0,
+                'lng': coords.isNotEmpty ? (coords[0] as num).toDouble() : 0.0,
+              };
+            })
             .toList();
       }
     } catch (_) {}
@@ -1027,6 +1222,7 @@ class _AuthScreenState extends State<AuthScreen> {
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'City is required' : null,
           ),
+          debounceDuration: const Duration(milliseconds: 500),
           suggestionsCallback: (query) async {
             setState(() => _citySearching = true);
             final results = await _searchCities(query);
@@ -1192,7 +1388,11 @@ class _AuthScreenState extends State<AuthScreen> {
         onPressed: () => setState(() => _obscure = !_obscure),
       ),
     ),
-    validator: (v) => (v == null || v.length < 6) ? 'Min 6 characters' : null,
+    // Sign-in still accepts older 6-character passwords; new ones need 8.
+    validator: (v) {
+      final min = _isLogin ? 6 : 8;
+      return (v == null || v.length < min) ? 'Min $min characters' : null;
+    },
   );
 
   Widget _forgotPasswordLink() => Padding(
@@ -1589,6 +1789,8 @@ class ApiService {
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    if (AuthState.token != null && AuthState.token!.isNotEmpty)
+      'X-Auth-Token': AuthState.token!,
   };
 
   static Future<Map<String, dynamic>> post(
@@ -1602,7 +1804,7 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
   }
 
@@ -1618,7 +1820,7 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
   }
 
@@ -1633,8 +1835,19 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       return _parse(res);
     } catch (e) {
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _networkError(e)};
     }
+  }
+
+  static String _networkError(Object e) {
+    debugPrint('API error: $e');
+    if (e is TimeoutException) {
+      return 'The server is taking too long to respond. Please try again.';
+    }
+    if (e is SocketException || e is http.ClientException) {
+      return 'No internet connection. Check your network and try again.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   static Map<String, dynamic> _parse(http.Response res) {

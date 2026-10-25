@@ -6,7 +6,31 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.db.models import Q
+import logging
 from .inforedzmodels import  *
+
+logger = logging.getLogger(__name__)
+
+
+MIN_PASSWORD_LENGTH = 8
+
+# Password-reset limits. OTP requests are counted from the database; wrong OTP
+# guesses are counted in Django's cache, so use a shared cache (e.g. Redis) in
+# production for the limit to hold across all server workers.
+OTP_REQUESTS_PER_HOUR   = 5
+OTP_MAX_FAILED_ATTEMPTS = 5
+OTP_SENT_MESSAGE        = 'If this email is registered, an OTP has been sent to it.'
+
+def _otp_fail_key(email):
+    import hashlib
+    return 'inforedz:otp_fail:' + hashlib.sha256(email.encode()).hexdigest()
+
+def _record_otp_failure(fail_key, user):
+    from django.core.cache import cache
+    cache.add(fail_key, 0, timeout=3600)
+    if cache.incr(fail_key) >= OTP_MAX_FAILED_ATTEMPTS and user:
+        # Burn the current OTP so it can't be brute-forced
+        PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
 
 
 # ── FORGOT PASSWORD ───────────────────────────────────────────
@@ -15,7 +39,10 @@ from .inforedzmodels import  *
 @method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordView(View):
     def post(self, request):
-        import random
+        import datetime
+        import secrets as _secrets
+        from django.conf import settings
+        from django.core.cache import cache
         from django.core.mail import send_mail
 
         data  = json_body(request)
@@ -26,14 +53,21 @@ class ForgotPasswordView(View):
         try:
             user = User.objects.get(email=email, is_active=True)
         except User.DoesNotExist:
-            # Don't reveal whether the email exist
-            return err('This email is not registered on InfoREDZ.', 400)
+            # Same answer as success, so the form can't reveal who is registered
+            return ok(message=OTP_SENT_MESSAGE)
+
+        recent = PasswordResetOTP.objects.filter(
+            user=user, created_at__gte=timezone.now() - datetime.timedelta(hours=1)
+        ).count()
+        if recent >= OTP_REQUESTS_PER_HOUR:
+            return err('Too many reset requests. Please try again in an hour.', 429)
 
         # Invalidate any previous unused OTPs for this user
         PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
 
-        otp = str(random.randint(100000, 999999))
+        otp = f'{_secrets.randbelow(1_000_000):06d}'
         PasswordResetOTP.objects.create(user=user, otp=otp)
+        cache.delete(_otp_fail_key(email))
 
         try:
             send_mail(
@@ -46,20 +80,24 @@ class ForgotPasswordView(View):
                     f'If you did not request this, ignore this email.\n\n'
                     f'— InfoREDZ Team'
                 ),
-                from_email=None,   # uses DEFAULT_FROM_EMAIL from settings
+                # The server's DEFAULT_FROM_EMAIL belongs to another project,
+                # so name the sender explicitly.
+                from_email=f'InfoREDZ <{settings.EMAIL_HOST_USER}>',
                 recipient_list=[email],
                 fail_silently=False,
             )
-        except Exception as e:
-            return err(f'Could not send OTP email: {str(e)}', 500)
+        except Exception:
+            logger.exception('Could not send OTP email')
+            return err('Could not send the OTP email. Please try again later.', 500)
 
-        return ok(message='OTP sent to your email address.')
+        return ok(message=OTP_SENT_MESSAGE)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyOTPView(View):
     def post(self, request):
         import secrets as _secrets
+        from django.core.cache import cache
         data  = json_body(request)
         email = data.get('email', '').strip().lower()
         otp   = data.get('otp', '').strip()
@@ -67,18 +105,22 @@ class VerifyOTPView(View):
         if not email or not otp:
             return err('email and otp are required.')
 
-        try:
-            user = User.objects.get(email=email, is_active=True)
-        except User.DoesNotExist:
-            return err('Invalid request.', 400)
+        fail_key = _otp_fail_key(email)
+        if cache.get(fail_key, 0) >= OTP_MAX_FAILED_ATTEMPTS:
+            return err('Too many wrong attempts. Please request a new OTP.', 429)
 
-        record = PasswordResetOTP.objects.filter(
-            user=user, otp=otp, is_used=False
-        ).order_by('-created_at').first()
+        user = User.objects.filter(email=email, is_active=True).first()
+        record = None
+        if user:
+            record = PasswordResetOTP.objects.filter(
+                user=user, otp=otp, is_used=False
+            ).order_by('-created_at').first()
 
         if not record or not record.is_valid():
+            _record_otp_failure(fail_key, user)
             return err('OTP is invalid or has expired.')
 
+        cache.delete(fail_key)
         reset_token = _secrets.token_urlsafe(32)
         record.reset_token = reset_token
         record.save(update_fields=['reset_token'])
@@ -97,8 +139,8 @@ class ResetPasswordView(View):
         if not email or not reset_token or not new_password:
             return err('email, reset_token and new_password are required.')
 
-        if len(new_password) < 6:
-            return err('Password must be at least 6 characters.')
+        if len(new_password) < MIN_PASSWORD_LENGTH:
+            return err(f'Password must be at least {MIN_PASSWORD_LENGTH} characters.')
 
         try:
             user = User.objects.get(email=email, is_active=True)
@@ -159,26 +201,44 @@ def get_user_by_id(user_id):
     except (User.DoesNotExist, ValueError, TypeError):
         return None, err('User not found.', 404)
 
+def token_required():
+    """
+    settings.INFOREDZ_REQUIRE_TOKEN = True rejects requests without X-Auth-Token.
+    Keep it False until every live app build (Android + iOS) sends the token,
+    otherwise older installs can no longer edit their profile.
+    """
+    from django.conf import settings
+    return getattr(settings, 'INFOREDZ_REQUIRE_TOKEN', False)
+
 def get_web_user(request, user_id):
     """
-    Website write-path auth.
+    Auth for any request that acts on a user's own data (app + website).
     If the request carries X-Auth-Token, it MUST match the user's token.
-    If it does not (e.g. the current Flutter app, which doesn't send one),
-    fall back to id-only lookup so the app keeps working until it's updated.
+    Without one, id-only lookup is allowed only while INFOREDZ_REQUIRE_TOKEN is off.
     """
     token = request.headers.get('X-Auth-Token', '')
     user, error = get_user_by_id(user_id)
     if error:
         return None, error
-    if token and user.auth_token and token != user.auth_token:
+    if not token:
+        if token_required():
+            return None, err('Please sign in again.', 401)
+        return user, None
+    if not user.auth_token or token != user.auth_token:
         return None, err('Invalid or expired session.', 401)
     return user, None
+
+def viewer_signed_in(request):
+    """True when the caller is a signed-in user — gates donor phone numbers."""
+    token = request.headers.get('X-Auth-Token', '')
+    if token:
+        return User.objects.filter(auth_token=token, is_active=True).exists()
+    return not token_required() and bool(request.GET.get('user_id'))
 
 def serialize_donor(user, include_contact=True):
     data = {
         'id':            user.id,
         'name':          user.name,
-        'email':         user.email,
         'role':          user.role,
         'blood_group':   user.blood_group,
         'city':          user.city,
@@ -193,8 +253,10 @@ def serialize_donor(user, include_contact=True):
         'longitude':     user.longitude,
         'created_at':    str(user.created_at.date()) if user.created_at else None,
     }
+    # Contact details only for signed-in viewers (and the user's own profile)
     if include_contact:
         data['phone'] = user.phone
+        data['email'] = user.email
     return data
 
 def serialize_bank(user):
@@ -263,8 +325,8 @@ class RegisterView(View):
         if not name:     return err('name is required.')
         if role not in ('donor', 'blood_bank'):
             return err("role must be 'donor' or 'blood_bank'.")
-        if len(password) < 6:
-            return err('Password must be at least 6 characters.')
+        if len(password) < MIN_PASSWORD_LENGTH:
+            return err(f'Password must be at least {MIN_PASSWORD_LENGTH} characters.')
         if User.objects.filter(email=email).exists():
             return err('An account with this email already exists.')
 
@@ -306,7 +368,8 @@ class RegisterView(View):
             return created(data={'user': payload}, message='Registration successful.')
 
         except Exception as e:
-            return err(f'Registration failed: {str(e)}', 500)
+            logger.exception('Registration failed')
+            return err('Registration failed. Please try again.', 500)
 
 
 # ── LOGIN ─────────────────────────────────────────────────────
@@ -330,7 +393,9 @@ class LoginView(View):
             return err('Invalid email or password.')
 
         payload = serialize_donor(user) if user.role == 'donor' else serialize_bank(user)
-        payload['auth_token'] = user.issue_token()
+        # Reuse the existing token so signing in on the app doesn't sign the
+        # user out of the website (and vice versa). Password reset clears it.
+        payload['auth_token'] = user.auth_token or user.issue_token()
         return ok(data={'user': payload}, message='Login successful.')
 
 
@@ -341,7 +406,7 @@ class LoginView(View):
 class ProfileView(View):
 
     def get(self, request):
-        user, error = get_user_by_id(request.GET.get('user_id'))
+        user, error = get_web_user(request, request.GET.get('user_id'))
         if error: return error
         payload = serialize_donor(user) if user.role == 'donor' else serialize_bank(user)
         return ok(data=payload)
@@ -381,7 +446,27 @@ class ProfileView(View):
             return ok(data=payload, message='Profile updated successfully.')
 
         except Exception as e:
-            return err(f'Update failed: {str(e)}', 500)
+            logger.exception('Update failed')
+            return err('Could not update your profile. Please try again.', 500)
+
+
+# ── DELETE ACCOUNT ────────────────────────────────────────────
+# POST /api/inforedz/delete-account/
+# Header: X-Auth-Token   Body: { user_id, password }
+# Permanently removes the user and everything linked to them (stock,
+# donations, requests, OTPs). Required by App Store guideline 5.1.1(v).
+@method_decorator(csrf_exempt, name='dispatch')
+class DeleteAccountView(View):
+    def post(self, request):
+        data = json_body(request)
+        if not request.headers.get('X-Auth-Token'):
+            return err('Please sign in again.', 401)
+        user, error = get_web_user(request, data.get('user_id'))
+        if error: return error
+        if not user.check_password(data.get('password', '')):
+            return err('Incorrect password.', 403)
+        user.delete()
+        return ok(message='Your account and data have been deleted.')
 
 
 # ── UPDATE LOCATION ───────────────────────────────────────────
@@ -429,7 +514,7 @@ class DonorListView(View):
             )
 
         # Phone is included only for signed-in web users (token present).
-        include_contact = bool(request.headers.get('X-Auth-Token')) or bool(request.GET.get('user_id'))
+        include_contact = viewer_signed_in(request)
         return ok(data=[serialize_donor(d, include_contact=include_contact) for d in qs.order_by('name')])
 
 
@@ -454,7 +539,7 @@ class DonorDetailView(View):
             user = User.objects.get(id=donor_id, role='donor', is_active=True)
         except User.DoesNotExist:
             return err('Donor not found.', 404)
-        include_contact = bool(request.headers.get('X-Auth-Token')) or bool(request.GET.get('user_id'))
+        include_contact = viewer_signed_in(request)
         return ok(data=serialize_donor(user, include_contact=include_contact))
 
 
@@ -518,7 +603,8 @@ class BloodBankStockView(View):
             stock_obj.update_from_dict(data)
             return ok(data=stock_obj.to_dict(), message='Stock updated successfully.')
         except Exception as e:
-            return err(f'Stock update failed: {str(e)}', 500)
+            logger.exception('Stock update failed')
+            return err('Could not update stock. Please try again.', 500)
 
 
 # ── STATS ─────────────────────────────────────────────────────
@@ -583,7 +669,8 @@ class RequestListView(View):
             )
             return created(data=serialize_request(r), message='Request posted.')
         except Exception as e:
-            return err(f'Could not post request: {str(e)}', 500)
+            logger.exception('Could not post request')
+            return err('Could not post the request. Please try again.', 500)
 
     def patch(self, request):
         data = json_body(request)
@@ -614,7 +701,7 @@ class RequestListView(View):
 class DonationView(View):
 
     def get(self, request):
-        user, error = get_user_by_id(request.GET.get('user_id'))
+        user, error = get_web_user(request, request.GET.get('user_id'))
         if error: return error
         rows = DonationLog.objects.filter(donor=user)
         return ok(data=[{
@@ -652,4 +739,5 @@ class DonationView(View):
                 'notes':      log.notes,
             }, message='Donation logged.')
         except Exception as e:
-            return err(f'Could not log donation: {str(e)}', 500)
+            logger.exception('Could not log donation')
+            return err('Could not log the donation. Please try again.', 500)

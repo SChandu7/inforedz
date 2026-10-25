@@ -198,7 +198,10 @@ class _DonorTabState extends State<DonorTab> {
             d.name.toLowerCase().contains(q) ||
             d.city.toLowerCase().contains(q) ||
             d.bloodGroup.toLowerCase().contains(q);
-        return matchGroup && matchAvailable && matchSearch;
+        return matchGroup &&
+            matchAvailable &&
+            matchSearch &&
+            !Moderation.isHidden('donor', d.id);
       }).toList();
     });
   }
@@ -243,7 +246,10 @@ class _DonorTabState extends State<DonorTab> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _DonorCard(donor: _filtered[i]),
+                    (_, i) => _DonorCard(
+                      donor: _filtered[i],
+                      onHidden: _applyFilter,
+                    ),
                     childCount: _filtered.length,
                   ),
                 ),
@@ -316,7 +322,8 @@ class _DonorTabState extends State<DonorTab> {
               'Eligibility guide',
             ),
             _menuItem('support', Icons.headset_mic_outlined, 'Help & Support'),
-            _menuItem('share', Icons.share_outlined, 'Share app'),
+            if (ApiConfig.storeUrl != null)
+              _menuItem('share', Icons.share_outlined, 'Share app'),
             _menuItem('privacy', Icons.privacy_tip_outlined, 'Privacy policy'),
           ],
         ),
@@ -409,16 +416,14 @@ class _DonorTabState extends State<DonorTab> {
         _showSupport();
         break;
       case 'share':
-        launchUrl(
-          Uri.parse(
-            'https://play.google.com/store/apps/details?id=com.inforedz.app',
-          ),
-          mode: LaunchMode.externalApplication,
-        );
+        final url = ApiConfig.storeUrl;
+        if (url != null) {
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        }
         break;
       case 'privacy':
         launchUrl(
-          Uri.parse('https://schandu7.github.io/infumedz/'),
+          Uri.parse(ApiConfig.privacyPolicyUrl),
           mode: LaunchMode.externalApplication,
         );
         break;
@@ -475,24 +480,36 @@ class _DonorTabState extends State<DonorTab> {
         ),
 
         // ── Stats ───────────────────────────────────────────
-        Row(
-          children: [
-            Expanded(
-              child: _aboutStat('2800+', 'Donors', Icons.people_rounded),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _aboutStat(
-                '120+',
-                'Centres',
-                Icons.local_hospital_rounded,
+        // Live counts from the server, never hard-coded claims
+        FutureBuilder<Map<String, dynamic>>(
+          future: AppStats.load(),
+          builder: (_, snap) => Row(
+            children: [
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'total_donors'),
+                  'Donors',
+                  Icons.people_rounded,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _aboutStat('12K+', 'Lives Saved', Icons.favorite_rounded),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'total_banks'),
+                  'Centres',
+                  Icons.local_hospital_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _aboutStat(
+                  AppStats.value(snap.data, 'cities'),
+                  'Cities',
+                  Icons.location_city_rounded,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -685,7 +702,7 @@ class _DonorTabState extends State<DonorTab> {
                   _footerLink(
                     'Privacy Policy',
                     () => launchUrl(
-                      Uri.parse('https://schandu7.github.io/infumedz/'),
+                      Uri.parse(ApiConfig.privacyPolicyUrl),
                       mode: LaunchMode.externalApplication,
                     ),
                   ),
@@ -1315,8 +1332,8 @@ class _DonorTabState extends State<DonorTab> {
     const text =
         '🔴 Register as a contributor today   •   '
         '🏢 Find centres near you on the map   •   '
-        '❤️ Over 12,000 people helped through Inforedz   •   '
-        '🆘 Post a request or call a contributor now   •   '
+        '❤️ Connect with willing contributors near you   •   '
+        '🆘 Call or WhatsApp a contributor in an emergency   •   '
         '✅ 100% Free — No fees, no ads, no barriers   •   '
         '📍 Enable location to appear on the map   •   ';
 
@@ -1450,11 +1467,14 @@ class _DonorTabState extends State<DonorTab> {
                 ),
               ),
               _heroDivider(),
-              const Expanded(
-                child: _heroStatStatic(
-                  '12K+',
-                  'Lives Saved',
-                  Icons.favorite_rounded,
+              Expanded(
+                child: FutureBuilder<Map<String, dynamic>>(
+                  future: AppStats.load(),
+                  builder: (_, snap) => _heroStat(
+                    AppStats.value(snap.data, 'total_banks'),
+                    'Centres',
+                    Icons.local_hospital_rounded,
+                  ),
                 ),
               ),
             ],
@@ -1768,39 +1788,12 @@ class _DonorTabState extends State<DonorTab> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// HERO STAT STATIC
-// ─────────────────────────────────────────────────────────────
-class _heroStatStatic extends StatelessWidget {
-  final String val, label;
-  final IconData icon;
-  const _heroStatStatic(this.val, this.label, this.icon);
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Icon(icon, size: 14, color: Colors.white70),
-      const SizedBox(height: 4),
-      Text(
-        val,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w900,
-          color: Colors.white,
-        ),
-      ),
-      Text(
-        label,
-        style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.8)),
-      ),
-    ],
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // DONOR CARD
 // ─────────────────────────────────────────────────────────────
 class _DonorCard extends StatelessWidget {
   final DonorModel donor;
-  const _DonorCard({required this.donor});
+  final VoidCallback? onHidden; // refreshes the list after "Hide"
+  const _DonorCard({required this.donor, this.onHidden});
 
   void _showEmailFallback(
     BuildContext context,
@@ -2335,6 +2328,57 @@ class _DonorCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Moderation.report(
+                      context,
+                      kind: 'donor',
+                      id: donor.id,
+                      name: donor.name,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.flag_outlined,
+                    size: 16,
+                    color: AppColors.textMuted,
+                  ),
+                  label: const Text(
+                    'Report',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () async {
+                    // This card leaves the list after hiding, so grab the
+                    // messenger while its context is still valid.
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(context);
+                    await Moderation.hide('donor', donor.id);
+                    onHidden?.call();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text("You won't see this contributor again."),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.visibility_off_outlined,
+                    size: 16,
+                    color: AppColors.textMuted,
+                  ),
+                  label: const Text(
+                    'Hide',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -2606,6 +2650,7 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
     if (_showDonors) {
       for (final d in _donorData) {
         if (d['is_available'] != true) continue;
+        if (Moderation.isHidden('donor', d['id'])) continue;
         final lat = (d['latitude'] as num?)?.toDouble();
         final lng = (d['longitude'] as num?)?.toDouble();
         if (lat == null || lng == null) continue;
@@ -2626,6 +2671,7 @@ class _DonorMapScreenState extends State<DonorMapScreen> {
     }
     if (_showBanks) {
       for (final b in _bankData) {
+        if (Moderation.isHidden('bank', b['id'])) continue;
         final lat = (b['latitude'] as num?)?.toDouble();
         final lng = (b['longitude'] as num?)?.toDouble();
         if (lat == null || lng == null) continue;

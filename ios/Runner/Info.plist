@@ -3,32 +3,39 @@
 <plist version="1.0">
 <dict>
 
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+
     <key>CFBundleDisplayName</key>
     <string>Inforedz</string>
 
-    <key>CFBundleIdentifier</key>
-    <string>com.inforedz.app</string>
+    <key>CFBundleName</key>
+    <string>Inforedz</string>
 
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <!-- Version and build number come from pubspec.yaml (version: x.y.z+N) -->
     <key>CFBundleShortVersionString</key>
-    <string>1.0.1</string>
+    <string>$(FLUTTER_BUILD_NAME)</string>
 
     <key>CFBundleVersion</key>
-    <string>2</string>
-
-    <key>GMSApiKey</key>
-<string>AIzaSyD02N7Yl8w0rpsPc2L-78qDw9apVnfDOdY</string>
+    <string>$(FLUTTER_BUILD_NUMBER)</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
-
-    <key>MinimumOSVersion</key>
-    <string>14.0</string>
 
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
 
     <key>LSRequiresIPhoneOS</key>
     <true/>
+
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
 
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
@@ -39,16 +46,6 @@
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationPortraitUpsideDown</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
     <key>UIViewControllerBasedStatusBarAppearance</key>
@@ -60,20 +57,21 @@
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
 
-    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>This app uses your location to provide relevant medical content and services near you.</string>
+    <!-- Schemes checked with canLaunchUrl (call / email / SMS buttons) -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>tel</string>
+        <string>mailto</string>
+        <string>sms</string>
+    </array>
 
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>This app uses your location to provide relevant medical content and services near you.</string>
+    <string>Inforedz uses your location to show blood donors and blood centres near you, and to set your city when you register.</string>
 
-    <key>NSCameraUsageDescription</key>
-    <string>This app uses the camera to allow you to upload profile and content images.</string>
-
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>This app accesses your photo library to allow you to upload images.</string>
-
-    <key>NSMicrophoneUsageDescription</key>
-    <string>This app uses the microphone for video recording features.</string>
+    <!-- Required by App Store Connect because the geolocator plugin links the
+         "Always" location API (ITMS-90683). The app never requests it. -->
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Inforedz only uses your location while the app is open, to show blood donors and blood centres near you.</string>
 
 </dict>
 </plist>
