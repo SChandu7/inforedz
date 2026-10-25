@@ -10,7 +10,8 @@
 #
 # Start a build from the Codemagic dashboard: Start new build -> branch
 # ios-release-blockers (or main once merged) -> workflow
-# "Inforedz iOS release to TestFlight".
+# "Inforedz iOS release to TestFlight" (signed IPA uploaded to TestFlight) or
+# "Inforedz iOS simulator preview" (zip to try in a browser, no upload).
 
 workflows:
   inforedz-ios-release:
@@ -83,3 +84,47 @@ workflows:
         # Uploads to TestFlight (internal testers). Submitting for App Review
         # stays a manual step in App Store Connect.
         submit_to_testflight: false
+
+  # Builds the app for the iOS *simulator*, to try it in a browser before an
+  # iPhone is available: upload Inforedz-simulator.zip to appetize.io, or use
+  # Codemagic's App Preview (teams on a paid plan only).
+  #
+  # Good for checking screens, sign-up/login, lists, profile and the map.
+  # Calls, SMS and WhatsApp buttons can't open in a simulator, and GPS is a
+  # fixed simulated location. No code signing or upload happens here.
+  inforedz-ios-simulator:
+    name: Inforedz iOS simulator preview
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+
+    environment:
+      flutter: 3.47.7
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Install CocoaPods
+        script: cd ios && pod install --repo-update
+
+      - name: Build for the simulator
+        script: |
+          # Flutter only builds debug for the simulator; it still runs on its
+          # own without a debugger attached.
+          flutter build ios --simulator
+          cd build/ios/iphonesimulator
+          zip -qr Inforedz-simulator.zip Runner.app
+
+    artifacts:
+      - build/ios/iphonesimulator/Runner.app
+      - build/ios/iphonesimulator/Inforedz-simulator.zip
+
+    publishing:
+      email:
+        recipients:
+          - chandrasekharsuragani532@gmail.com
+        notify:
+          success: true
+          failure: true

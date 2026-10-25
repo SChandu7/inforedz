@@ -77,7 +77,7 @@ class ApiConfig {
   // from App Store Connect (App Information → Apple ID) once the app exists.
   static const playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.inforedz.app';
-  static const appStoreId = '';
+  static const appStoreId = '6761141438';
   static String? get storeUrl {
     if (Platform.isIOS) {
       return appStoreId.isEmpty ? null : 'https://apps.apple.com/app/id$appStoreId';

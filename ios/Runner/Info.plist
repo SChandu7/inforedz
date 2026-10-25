@@ -68,5 +68,10 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Inforedz uses your location to show blood donors and blood centres near you, and to set your city when you register.</string>
 
+    <!-- Required by App Store Connect because the geolocator plugin links the
+         "Always" location API (ITMS-90683). The app never requests it. -->
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Inforedz only uses your location while the app is open, to show blood donors and blood centres near you.</string>
+
 </dict>
 </plist>
