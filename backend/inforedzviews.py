@@ -41,6 +41,7 @@ class ForgotPasswordView(View):
     def post(self, request):
         import datetime
         import secrets as _secrets
+        from django.conf import settings
         from django.core.cache import cache
         from django.core.mail import send_mail
 
@@ -79,7 +80,9 @@ class ForgotPasswordView(View):
                     f'If you did not request this, ignore this email.\n\n'
                     f'— InfoREDZ Team'
                 ),
-                from_email=None,   # uses DEFAULT_FROM_EMAIL from settings
+                # The server's DEFAULT_FROM_EMAIL belongs to another project,
+                # so name the sender explicitly.
+                from_email=f'InfoREDZ <{settings.EMAIL_HOST_USER}>',
                 recipient_list=[email],
                 fail_silently=False,
             )
@@ -737,4 +740,4 @@ class DonationView(View):
             }, message='Donation logged.')
         except Exception as e:
             logger.exception('Could not log donation')
-            return err('Could not log the donation. Please try again.', 500)
+            return err('Could not log the donation. Please try again.', 500)

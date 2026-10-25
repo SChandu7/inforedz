@@ -85,9 +85,9 @@ class ApiConfig {
     return playStoreUrl;
   }
 
-  // Public pages (GitHub Pages, docs/ folder of this repo)
-  static const privacyPolicyUrl = 'https://schandu7.github.io/inforedz/privacy.html';
-  static const supportUrl = 'https://schandu7.github.io/inforedz/support.html';
+  // Public pages on the InfoREDZ website (source: docs/ in this repo)
+  static const privacyPolicyUrl = 'https://inforedz.com/privacy';
+  static const supportUrl = 'https://inforedz.com/support';
 }
 
 // ── LIVE STATS ────────────────────────────────────────────────
